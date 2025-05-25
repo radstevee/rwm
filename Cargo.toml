@@ -1,0 +1,13 @@
+[package]
+name = "rwm"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+derive-getters = { version = "0.5.0", features = ["auto_copy_getters"] }
+derive_setters = "0.1.7"
+x11 = { version = "2.21.0", optional = true, features = ["all"] }
+
+[features]
+default = ["x11"]
+x11 = ["dep:x11"]
