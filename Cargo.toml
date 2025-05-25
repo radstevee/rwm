@@ -4,10 +4,14 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+anyhow = "1.0.98"
+chrono = "0.4.41"
 derive-getters = { version = "0.5.0", features = ["auto_copy_getters"] }
 derive_setters = "0.1.7"
-x11 = { version = "2.21.0", optional = true, features = ["all"] }
+tracing = "0.1.41"
+tracing-subscriber = "0.3.19"
+x11rb = { version = "0.13.1", optional = true, features = ["all-extensions"]}
 
 [features]
 default = ["x11"]
-x11 = ["dep:x11"]
+x11 = ["dep:x11rb"]

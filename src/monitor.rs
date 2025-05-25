@@ -1,5 +1,3 @@
-use derive_getters::Getters;
-
 use crate::prelude::*;
 
 /// A monitor represents a screen, whether physical or emulated. A monitor can hold [`MAX_TAGS`] amount

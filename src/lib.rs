@@ -8,10 +8,10 @@ pub mod monitor;
 pub mod tag;
 pub mod tagset;
 pub mod window;
+pub mod util;
 
 pub mod prelude;
 
-pub(crate) mod util;
-
+pub mod platform;
 #[cfg(feature = "x11")]
 pub mod x11;

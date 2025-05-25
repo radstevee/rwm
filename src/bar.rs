@@ -1,6 +1,3 @@
-use derive_getters::Getters;
-use derive_setters::Setters;
-
 use crate::prelude::*;
 
 /// The optional status bar.

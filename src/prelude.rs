@@ -1,4 +1,6 @@
+#[cfg(feature = "x11")]
 pub use crate::x11::*;
+#[cfg(feature = "x11")]
 pub use crate::x11::atom::*;
 pub use crate::bar::*;
 pub use crate::client::*;
@@ -10,3 +12,10 @@ pub use crate::monitor::*;
 pub use crate::tag::*;
 pub use crate::tagset::*;
 pub use crate::window::*;
+pub use crate::platform::*;
+pub use crate::util::*;
+
+pub use anyhow::*;
+pub use derive_getters::*;
+pub use derive_setters::*;
+pub use tracing::*;

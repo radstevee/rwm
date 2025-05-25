@@ -21,3 +21,13 @@ pub enum Atom {
     WMState,
     WMTakeFocus,
 }
+
+impl Atom {
+    pub const fn id(&self) -> &'static str {
+        match self {
+            Self::WMProtocols => "WM_PROTOCOLS",
+            Self::WMDelete => "WM_DELETE_WINDOW",
+            _ => todo!()
+        }
+    }
+}

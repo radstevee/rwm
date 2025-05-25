@@ -1,5 +1,4 @@
-use derive_getters::Getters;
-use derive_setters::Setters;
+use crate::prelude::*;
 
 /// Generic struct for geometry.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Getters, Setters)]

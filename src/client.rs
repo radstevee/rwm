@@ -1,5 +1,3 @@
-use derive_getters::Getters;
-
 use crate::prelude::*;
 
 /// A client is a window that rwm manages.

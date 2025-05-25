@@ -1,6 +1,3 @@
-use derive_getters::Getters;
-use derive_setters::Setters;
-
 use crate::prelude::*;
 
 /// A tag is a workspace that contains any number of clients. By default, only one tag is focused, but any amount of tags can be selected.
@@ -18,8 +15,7 @@ pub struct Tag {
     clients: Vec<Client>,
 
     /// The current layout of the tag.
-    #[getter(skip)]
-    layout: Box<dyn Layout>,
+    layout: Layout,
 
     /// The percentage of the size that the master client is using.
     #[setters(generate)]
@@ -46,17 +42,10 @@ impl Tag {
         &mut self.clients
     }
 
-    /// The layout of this tag.
-    pub fn layout(&self) -> Box<dyn Layout> {
-        self.layout.clone()
-    }
-
     /// Changes the layout of this tag.
-    pub fn change_layout<L>(&mut self, layout: L) -> &mut Tag
-    where
-        L: Layout + 'static,
+    pub fn change_layout(&mut self, layout: Layout) -> &mut Tag
     {
-        self.layout = Box::new(layout);
+        self.layout = layout;
         self
     }
 }
