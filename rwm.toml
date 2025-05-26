@@ -1,0 +1,15 @@
+[tags]
+# All tags that are enabled. There can be up to ten tags.
+enabled_tags = [1, 2, 3, 4, 5, 6, 7, 8, 9]
+
+# Labels for these tags. You don't need to specify labels for unused tags.
+
+label_1 = "1"
+label_2 = "2"
+label_3 = "3"
+label_4 = "4"
+label_5 = "5"
+label_6 = "6"
+label_7 = "7"
+label_8 = "8"
+label_9 = "9"

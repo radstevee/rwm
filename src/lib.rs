@@ -1,6 +1,7 @@
 pub mod bar;
 pub mod client;
 pub mod color;
+pub mod config;
 pub mod cursor;
 pub mod geometry;
 pub mod layout;

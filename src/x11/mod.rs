@@ -1,6 +1,6 @@
-use std::{process::exit, sync::OnceLock};
+use std::sync::OnceLock;
 
-use crate::prelude::*;
+use crate::{die, prelude::*};
 use x11rb::{
     connect,
     connection::Connection,
@@ -36,8 +36,7 @@ fn become_wm(conn: &RustConnection, screen: &Screen) -> Result<()> {
         .check();
     if let Err(ReplyError::X11Error(ref error)) = res {
         if error.error_kind == ErrorKind::Access {
-            error!("another WM is already running");
-            exit(1)
+            die!("another WM is already running");
         } else {
             Ok(())
         }
@@ -47,11 +46,21 @@ fn become_wm(conn: &RustConnection, screen: &Screen) -> Result<()> {
 }
 
 impl X11State {
+    pub fn state() -> &'static X11State {
+        X11_STATE.get().unwrap_or_else(|| die!("X11 state not initialised yet"))
+    }
+    
     fn init_monitors(screens: Vec<Screen>) -> Vec<Monitor> {
-        let tags = (0..=MAX_TAGS)
-            .map(|idx| Tag::new(idx as u8, "tag", Layout::new("", "", test_layout)))
-            .collect::<Vec<Tag>>()
-            .slice::<MAX_TAGS>();
+        let tags_cfg = config().tags().clone();
+        let tags = tags_cfg
+            .enabled_tags()
+            .into_iter()
+            .map(|tag| {
+                let label = tags_cfg.label(*tag).unwrap();
+
+                Tag::new(*tag, label, Layout::new("", "", test_layout))
+            })
+            .collect::<Vec<Tag>>();
 
         let mut prev_screen = None;
         let mut monitors = vec![];
@@ -113,7 +122,7 @@ impl X11State {
         Ok(X11State {
             conn,
             monitors: X11State::init_monitors(screens),
-            root_gc: root_gc,
+            root_gc,
             wm_protocols,
             wm_delete_window,
         })

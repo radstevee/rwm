@@ -24,7 +24,7 @@ pub struct Monitor {
     /// All tags on this monitor. These are different to a [`TagSet`] in the way that they are the [`Tag`]
     /// struct instead of its index. The [`Tag`] struct holds information about a tag, such as its clients
     /// and its state.
-    tags: [Tag; MAX_TAGS],
+    tags: Vec<Tag>,
 
     /// The currently selected client.
     /// On X11, this will be None if currently hovering over the root window.

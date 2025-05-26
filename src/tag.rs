@@ -10,7 +10,7 @@ pub struct Tag {
     idx: u8,
 
     /// The label of the tag.
-    label: &'static str,
+    label: String,
 
     /// All clients in this tag.
     clients: Vec<Client>,

@@ -10,3 +10,4 @@ heavily WIP project to rewrite dwm in rust and make it much better!
 - [ ] hot reloading configuration
 - [ ] use minimal resources
 - [ ] support x and wlr
+- [ ] have a good CLI

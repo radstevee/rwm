@@ -1,7 +1,7 @@
 use crate::util::zeroed;
 
 /// The maximum amount of tags a monitor can have.
-pub const MAX_TAGS: usize = 16;
+pub const MAX_TAGS: usize = 10;
 
 /// Represents a set of tags that can be toggled between their indices and zeroes.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]

@@ -1,6 +1,7 @@
 pub use crate::bar::*;
 pub use crate::client::*;
 pub use crate::color::*;
+pub use crate::config::*;
 pub use crate::cursor::*;
 pub use crate::geometry::*;
 pub use crate::layout::*;
