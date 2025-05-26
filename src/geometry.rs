@@ -3,6 +3,7 @@ use crate::prelude::*;
 /// Generic struct for geometry.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Getters, Setters)]
 #[setters(prefix = "set_")]
+#[constructor(named(new), fields(x, y, width, height))]
 pub struct Geometry {
     /// The x position.
     x: u32,

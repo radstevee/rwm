@@ -4,6 +4,7 @@ use crate::prelude::*;
 #[derive(Debug, Clone, Getters, Setters)]
 #[setters(prefix = "set_")]
 #[setters(generate = false)]
+#[constructor(named(new), fields(idx, label, layout))]
 pub struct Tag {
     /// The index of the tag.
     idx: u8,
@@ -43,15 +44,14 @@ impl Tag {
     }
 
     /// Changes the layout of this tag.
-    pub fn change_layout(&mut self, layout: Layout) -> &mut Tag
-    {
+    pub fn change_layout(&mut self, layout: Layout) -> &mut Tag {
         self.layout = layout;
         self
     }
 }
 
 /// Gaps between windows.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Getters, Setters)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Getters, Setters, Default)]
 #[setters(prefix = "set_")]
 #[setters(generate_delegates(ty = "Tag", field = "gaps", prefix = "set_gaps_"))]
 pub struct Gaps {
@@ -69,7 +69,7 @@ pub struct Gaps {
 }
 
 /// The state of a tag.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Getters, Setters)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Getters, Setters, Default)]
 #[setters(prefix = "set_")]
 pub struct TagState {
     /// Whether this tag is currently selected.

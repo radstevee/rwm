@@ -27,7 +27,7 @@ impl Atom {
         match self {
             Self::WMProtocols => "WM_PROTOCOLS",
             Self::WMDelete => "WM_DELETE_WINDOW",
-            _ => todo!()
+            _ => todo!(),
         }
     }
 }

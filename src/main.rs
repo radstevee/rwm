@@ -1,4 +1,4 @@
-use rwm::prelude::*;
+use rwm::{catching, prelude::*};
 use tracing_subscriber::fmt::format;
 
 fn main() -> Result<()> {
@@ -8,9 +8,8 @@ fn main() -> Result<()> {
         .with_timer(TimeFormatter);
 
     tracing_subscriber::fmt().event_format(fmt).init();
-    info!("Initialising platform {}", PLATFORM.name());
-    
-    PLATFORM.init()?;
-    
+    info!("initialising platform {}", PLATFORM.name());
+    catching!(("initialising platform {}", PLATFORM.name()), PLATFORM.init());
+
     Ok(())
 }

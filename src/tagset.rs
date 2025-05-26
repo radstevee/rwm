@@ -7,8 +7,11 @@ pub const MAX_TAGS: usize = 16;
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Tagset([u8; MAX_TAGS]);
 
-/// An all-zero [`TagSet`].
-pub const EMPTY_TAGSET: Tagset = Tagset(zeroed::<MAX_TAGS>());
+impl Default for Tagset {
+    fn default() -> Self {
+        Tagset(zeroed::<MAX_TAGS>())
+    }
+}
 
 impl Tagset {
     /// All tags in this tagset, regardless of their status.

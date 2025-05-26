@@ -1,8 +1,9 @@
 use crate::prelude::*;
 
 /// The optional status bar.
-#[derive(Debug, Clone, Copy, PartialEq, Getters, PartialOrd, Setters)]
+#[derive(Debug, Clone, Copy, PartialEq, Getters, PartialOrd, Setters, Default)]
 #[setters(prefix = "set_")]
+#[constructor(named(new), fields(show, top))]
 pub struct Bar {
     /// The bar window.
     window: Option<Window>,

@@ -3,7 +3,16 @@ use crate::prelude::*;
 /// A monitor represents a screen, whether physical or emulated. A monitor can hold [`MAX_TAGS`] amount
 /// of tags, which can each hold clients.
 #[derive(Clone, Debug, PartialEq, Getters)]
+#[constructor(named(new), fields(idx, tags, dimensions))]
 pub struct Monitor {
+    /// The index of this monitor.
+    #[getter(copy)]
+    idx: u8,
+
+    /// The dimensions of this monitor.
+    #[getter(copy)]
+    dimensions: Geometry,
+
     /// A tagset containing the selected tags.
     #[getter(copy)]
     selected_tagset: Tagset,

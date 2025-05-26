@@ -7,8 +7,8 @@ pub mod layout;
 pub mod monitor;
 pub mod tag;
 pub mod tagset;
-pub mod window;
 pub mod util;
+pub mod window;
 
 pub mod prelude;
 

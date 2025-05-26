@@ -12,7 +12,7 @@ wayland_unimplemented!();
 pub trait Platform {
     /// The name of the platform.
     fn name(&self) -> &'static str;
-    
+
     /// Initialises the platform.
     fn init(&self) -> Result<()>;
 }
