@@ -9,7 +9,7 @@ heavily WIP project to rewrite dwm in rust and make it much better!
 - [ ] have good config and documentation
 - [ ] hot reloading configuration
 - [ ] use minimal resources
-- [ ] support x and wlr
+- [ ] support x and wayland
 - [ ] have a good CLI
 
 ## development
