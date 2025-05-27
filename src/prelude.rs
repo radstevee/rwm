@@ -9,6 +9,7 @@ pub use crate::monitor::*;
 pub use crate::platform::*;
 pub use crate::tag::*;
 pub use crate::tagset::*;
+#[macro_use]
 pub use crate::util::*;
 pub use crate::window::*;
 #[cfg(feature = "x11")]

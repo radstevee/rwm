@@ -67,6 +67,14 @@ macro_rules! die {
     };
 }
 
+#[macro_export]
+macro_rules! dev_only {
+    ($($action:tt)+) => {
+        #[cfg(debug_assertions)]
+        $($action)+
+    }
+}
+
 /// A HH:MM:SS time formatter for tracing_subscriber.
 pub struct TimeFormatter;
 

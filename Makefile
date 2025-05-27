@@ -3,6 +3,9 @@ display:
 
 dev:
 	DISPLAY=:9 LOG_LEVEL=trace cargo run
+	
+dev-hot:
+	DISPLAY=:9 LOG_LEVEL=trace dx run --hot-patch --args="--help"
 
 debug:
 	cargo build

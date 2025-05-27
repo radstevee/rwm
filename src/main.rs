@@ -1,7 +1,8 @@
 use std::path::PathBuf;
 
+use tracing_subscriber::fmt::format;
 use clap::Parser;
-use rwm::{catching, prelude::*};
+use rwm::{catching, dev_only, prelude::*};
 use tracing::level_filters::LevelFilter;
 use tracing_subscriber::{
     EnvFilter,
@@ -16,7 +17,6 @@ struct Cli {
     #[arg(short = 'c', long, value_name = "config")]
     config_file: Option<PathBuf>,
 }
-
 fn main() -> Result<()> {
     let cli = Cli::parse();
 
@@ -52,6 +52,10 @@ fn main() -> Result<()> {
         ("failed initialising platform {}", PLATFORM.name()),
         PLATFORM.init()
     );
+    
+    dev_only! {
+        println!("Dev");
+    };
 
     Ok(())
 }

@@ -16,6 +16,21 @@ tracing = "0.1.41"
 tracing-subscriber = { version = "0.3.19", features = ["std", "env-filter"] }
 x11rb = { version = "0.13.1", optional = true, features = ["all-extensions"]}
 
+[dev-dependencies]
+dioxus-devtools = "0.6.2"
+
 [features]
 default = ["x11"]
 x11 = ["dep:x11rb"]
+
+[profile]
+
+[profile.wasm-dev]
+inherits = "dev"
+opt-level = 1
+
+[profile.server-dev]
+inherits = "dev"
+
+[profile.android-dev]
+inherits = "dev"
