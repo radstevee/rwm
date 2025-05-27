@@ -1,13 +1,9 @@
 use std::path::PathBuf;
 
-use tracing_subscriber::fmt::format;
 use clap::Parser;
-use rwm::{catching, dev_only, prelude::*};
+use rwm::prelude::*;
 use tracing::level_filters::LevelFilter;
-use tracing_subscriber::{
-    EnvFilter,
-    fmt::format,
-};
+use tracing_subscriber::{EnvFilter, fmt::format};
 
 /// The rwm CLI.
 #[derive(Parser)]
@@ -17,6 +13,7 @@ struct Cli {
     #[arg(short = 'c', long, value_name = "config")]
     config_file: Option<PathBuf>,
 }
+
 fn main() -> Result<()> {
     let cli = Cli::parse();
 
@@ -27,10 +24,15 @@ fn main() -> Result<()> {
 
     tracing_subscriber::fmt()
         .event_format(fmt)
-        .with_env_filter(EnvFilter::builder()
-            .with_default_directive(LevelFilter::INFO.into())
-            .with_env_var("LOG_LEVEL")
-            .from_env_lossy()
+        .with_env_filter(
+            EnvFilter::builder()
+                .with_default_directive(if !cfg!(debug_assertions) {
+                    LevelFilter::INFO.into()
+                } else {
+                    LevelFilter::TRACE.into()
+                })
+                .with_env_var("RWM_LOG_LEVEL")
+                .from_env_lossy(),
         )
         .init();
 
@@ -42,9 +44,9 @@ fn main() -> Result<()> {
         ("failed loading configuration file: {}", config_file_path),
         load_config(config_file)
     );
-    
+
     catching!("failed validating configuration file", config.validate());
-    
+
     debug!("configuration file: {:#?}", config.clone());
 
     info!("initialising platform {}", PLATFORM.name());
@@ -52,10 +54,11 @@ fn main() -> Result<()> {
         ("failed initialising platform {}", PLATFORM.name()),
         PLATFORM.init()
     );
-    
+
     dev_only! {
-        println!("Dev");
+        dioxus_devtools::connect_subsecond();
     };
+
 
     Ok(())
 }

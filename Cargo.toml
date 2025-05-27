@@ -15,9 +15,7 @@ serde = { version = "1.0.219", features = ["derive"] }
 tracing = "0.1.41"
 tracing-subscriber = { version = "0.3.19", features = ["std", "env-filter"] }
 x11rb = { version = "0.13.1", optional = true, features = ["all-extensions"]}
-
-[dev-dependencies]
-dioxus-devtools = "0.6.2"
+dioxus-devtools = { git = "https://github.com/DioxusLabs/dioxus" }
 
 [features]
 default = ["x11"]

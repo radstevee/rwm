@@ -1,4 +1,4 @@
-use crate::util::zeroed;
+use crate::prelude::*;
 
 /// The maximum amount of tags a monitor can have.
 pub const MAX_TAGS: usize = 10;

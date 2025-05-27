@@ -6,7 +6,7 @@ use figment::{
 };
 use serde::Deserialize;
 
-use crate::{die, prelude::*};
+use crate::prelude::*;
 
 /// Main configuration file.
 #[derive(Deserialize, Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Getters)]

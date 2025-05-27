@@ -1,3 +1,5 @@
+// API
+
 pub use crate::bar::*;
 pub use crate::client::*;
 pub use crate::color::*;
@@ -9,14 +11,24 @@ pub use crate::monitor::*;
 pub use crate::platform::*;
 pub use crate::tag::*;
 pub use crate::tagset::*;
-#[macro_use]
 pub use crate::util::*;
 pub use crate::window::*;
+
+// X11 impls
 #[cfg(feature = "x11")]
 pub use crate::x11::atom::*;
 #[cfg(feature = "x11")]
 pub use crate::x11::*;
+#[cfg(feature = "x11")]
+pub use crate::x11::platform::*;
 
+// Macros
+pub use crate::wayland_unimplemented;
+pub use crate::catching;
+pub use crate::dev_only;
+pub use crate::die;
+
+// Libraries and utilities
 pub use anyhow::*;
 pub use derive_constructors::*;
 pub use derive_getters::*;
