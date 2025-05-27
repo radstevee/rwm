@@ -4,7 +4,7 @@ use crate::prelude::*;
 pub struct X11;
 
 impl Platform for X11 {
-    fn init(&self) -> anyhow::Result<()> {
+    fn init(&self) -> Result<()> {
         X11_STATE.set(X11State::create()?).map_err(|_| ()).unwrap();
         let state = X11State::state();
         debug!("Monitors: {:#?}", state.monitors.clone());

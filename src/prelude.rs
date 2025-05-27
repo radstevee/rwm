@@ -18,19 +18,22 @@ pub use crate::window::*;
 #[cfg(feature = "x11")]
 pub use crate::x11::atom::*;
 #[cfg(feature = "x11")]
-pub use crate::x11::*;
-#[cfg(feature = "x11")]
 pub use crate::x11::platform::*;
+#[cfg(feature = "x11")]
+pub use crate::x11::*;
 
 // Macros
-pub use crate::wayland_unimplemented;
 pub use crate::catching;
 pub use crate::dev_only;
 pub use crate::die;
+pub use crate::wayland_unimplemented;
 
 // Libraries and utilities
-pub use anyhow::*;
+pub use anyhow::{Result, Error, Context, bail};
 pub use derive_constructors::*;
 pub use derive_getters::*;
 pub use derive_setters::*;
 pub use tracing::*;
+
+pub use std::result::Result::*;
+

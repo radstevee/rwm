@@ -59,6 +59,5 @@ fn main() -> Result<()> {
         dioxus_devtools::connect_subsecond();
     };
 
-
     Ok(())
 }

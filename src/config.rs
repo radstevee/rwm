@@ -54,7 +54,7 @@ pub struct TagsConfig {
 
     /// Label for tag 9.
     label_9: Option<String>,
-    
+
     /// Label for tag 10.
     label_10: Option<String>,
 }
@@ -154,5 +154,7 @@ pub fn load_config(file: PathBuf) -> Result<MainConfig> {
 
 /// Gets the loaded configuration file, or panic if it does not exist.
 pub fn config() -> &'static MainConfig {
-    CONFIG.get().unwrap_or_else(|| die!("configuration file not loaded yet"))
+    CONFIG
+        .get()
+        .unwrap_or_else(|| die!("configuration file not loaded yet"))
 }

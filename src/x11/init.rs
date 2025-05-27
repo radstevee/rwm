@@ -1,5 +1,14 @@
-use x11rb::{connection::Connection, errors::ReplyError, protocol::{xproto::{ChangeWindowAttributesAux, ConnectionExt, CreateGCAux, EventMask, Screen}, ErrorKind}, rust_connection::RustConnection};
 use crate::prelude::*;
+use x11rb::{
+    connection::Connection,
+    errors::ReplyError,
+    protocol::{
+        xproto::{ChangeWindowAttributesAux, ConnectionExt, CreateGCAux, EventMask, MapState, Screen}, ErrorKind
+    },
+    rust_connection::RustConnection,
+};
+
+use super::X11_STATE;
 
 pub fn become_wm(conn: &RustConnection, screen: &Screen) -> Result<()> {
     let change = ChangeWindowAttributesAux::default()
@@ -23,7 +32,7 @@ pub fn load_monitors(screens: Vec<Screen>) -> Vec<Monitor> {
     let tags_cfg = config().tags().clone();
     let tags = tags_cfg
         .enabled_tags()
-        .into_iter()
+        .iter()
         .map(|tag| {
             let label = tags_cfg.label(*tag).unwrap();
 
@@ -47,7 +56,7 @@ pub fn load_monitors(screens: Vec<Screen>) -> Vec<Monitor> {
 
         monitors.push(Monitor::new(idx as u8, tags.clone(), dimensions));
 
-        prev_screen = Some(&screen);
+        prev_screen = Some(screen);
     }
 
     monitors
@@ -88,11 +97,56 @@ pub fn init_state(
         .context("failed receiving WM_DELETE_WINDOW reply")?
         .atom;
 
-    Ok(X11State {
+    let mut state = X11State {
         conn,
-        monitors: load_monitors(screens),
+        monitors: load_monitors(screens.clone()),
         root_gc,
         wm_protocols,
         wm_delete_window,
-    })
+    };
+
+    scan_existing_windows(&mut state, screens)?;
+
+    Ok(state)
 }
+
+pub fn scan_existing_windows(state: &mut X11State, screens: Vec<Screen>) -> Result<()> {
+    for screen in screens {
+        let tree = state
+            .conn
+            .query_tree(screen.root)
+            .context("failed querying tree")?
+            .reply()
+            .context("failed receiving tree reply")?;
+
+        let mut windows = Vec::with_capacity(tree.children.len());
+
+        for win in tree.children {
+            let attr = match state.conn.get_window_attributes(win)?.reply() {
+                Ok(attr) => attr,
+                Err(_) => continue,
+            };
+            let geom = match state.conn.get_geometry(win)?.reply() {
+                Ok(geom) => geom,
+                Err(_) => continue,
+            };
+
+            windows.push((win, attr, geom));
+        }
+
+        for (win, attr, geom) in windows {
+            if !attr.override_redirect && attr.map_state != MapState::UNMAPPED {
+                let geom = Geometry::new(
+                    geom.x as u32,
+                    geom.y as u32,
+                    geom.width as u32,
+                    geom.height as u32,
+                );
+                state.manage(win, geom)?;
+            }
+        }
+    }
+
+    Ok(())
+}
+
