@@ -1,9 +1,6 @@
 use crate::prelude::*;
 
 #[cfg(feature = "x11")]
-pub mod x11;
-
-#[cfg(feature = "x11")]
 pub const PLATFORM: platform::X11 = platform::X11;
 #[cfg(not(feature = "x11"))]
 wayland_unimplemented!();
@@ -15,4 +12,7 @@ pub trait Platform {
 
     /// Initialises the platform.
     fn init(&self) -> Result<()>;
+
+    /// Runs the main loop for this platform.
+    fn run(&self) -> Result<()>;
 }

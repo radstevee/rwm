@@ -46,13 +46,13 @@ impl Monitor {
         self.tags.iter().flat_map(Tag::clients).collect()
     }
 
-    /// Gets the tag object for the given [`tag`].
-    pub fn tag(&self, tag: usize) -> &Tag {
-        &self.tags[tag]
+    /// Gets the tag object at the given [`tag_idx`].
+    pub fn tag(&self, tag_idx: usize) -> &Tag {
+        &self.tags[tag_idx]
     }
 
-    /// Gets a mutable reference to the tag object for the given [`tag`].
-    pub fn tag_mut(&mut self, tag: usize) -> &mut Tag {
-        &mut self.tags[tag]
+    /// Gets a mutable reference to the tag object at the given [`tag_idx`].
+    pub fn tag_mut(&mut self, tag_idx: usize) -> &mut Tag {
+        &mut self.tags[tag_idx]
     }
 }

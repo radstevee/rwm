@@ -56,8 +56,15 @@ fn main() -> Result<()> {
     );
 
     dev_only! {
+        info!("connecting devtools");
         dioxus_devtools::connect_subsecond();
     };
+
+    info!("running platform {}", PLATFORM.name());
+    catching!(
+        ("failed running platform {}", PLATFORM.name()),
+        PLATFORM.run()
+    );
 
     Ok(())
 }

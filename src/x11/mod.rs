@@ -1,12 +1,17 @@
-use std::sync::OnceLock;
+use std::sync::{Mutex, MutexGuard, OnceLock};
 
 use crate::prelude::*;
+use dioxus_devtools::subsecond;
 use init::{become_wm, init_state};
 use x11rb::{
     COPY_DEPTH_FROM_PARENT, connect,
     connection::Connection,
-    protocol::xproto::{
-        Atom, AtomEnum, ConnectionExt, CreateWindowAux, EventMask, Gcontext, SetMode, WindowClass,
+    protocol::{
+        Event,
+        xproto::{
+            Atom, AtomEnum, ConnectionExt, CreateWindowAux, EventMask, Gcontext, MapRequestEvent,
+            SetMode, WindowClass,
+        },
     },
     rust_connection::RustConnection,
 };
@@ -26,10 +31,12 @@ pub struct X11State {
 }
 
 impl X11State {
-    pub fn state() -> &'static X11State {
+    pub fn state() -> MutexGuard<'static, X11State> {
         X11_STATE
             .get()
             .unwrap_or_else(|| die!("X11 state not initialised yet"))
+            .lock()
+            .unwrap_or_else(|e| die!("deadlock: {e:#?}"))
     }
 
     pub fn create() -> Result<X11State> {
@@ -65,7 +72,6 @@ impl X11State {
     pub fn manage(&mut self, window: Window, geom: Geometry) -> Result<()> {
         info!("Managing window {window} (geom: {geom:#?}");
 
-        // TODO: fetch window name from NET_WM_NAME
         let window_name = self.window_name(window)?.leak();
         let client = Client::new(window_name, geom); // FIXME: is it fine to leak?
         let monitor_idx =
@@ -92,26 +98,38 @@ impl X11State {
                     | EventMask::ENTER_WINDOW,
             )
             .background_pixel(screen.white_pixel);
-        self.conn.create_window(
-            COPY_DEPTH_FROM_PARENT,
-            frame_window,
-            screen.root,
-            geom.x() as i16,
-            geom.y() as i16,
-            geom.width() as u16,
-            geom.height() as u16 + 20,
-            1,
-            WindowClass::INPUT_OUTPUT,
-            0,
-            &win_aux,
-        ).context("failed creating frame window")?;
+        self.conn
+            .create_window(
+                COPY_DEPTH_FROM_PARENT,
+                frame_window,
+                screen.root,
+                geom.x() as i16,
+                geom.y() as i16,
+                geom.width() as u16,
+                geom.height() as u16 + 20,
+                1,
+                WindowClass::INPUT_OUTPUT,
+                0,
+                &win_aux,
+            )
+            .context("failed creating frame window")?;
 
         self.conn.grab_server().context("failed grabbing server")?;
-        self.conn.change_save_set(SetMode::INSERT, window).context("failed inserting window")?;
-        self.conn.reparent_window(window, frame_window, 0, 20).context("failed reparenting window")?;
-        self.conn.map_window(window).context("failed mapping window")?;
-        self.conn.map_window(frame_window).context("failed mapping parent window")?;
-        self.conn.ungrab_server().context("failed ungrabbing server")?;
+        self.conn
+            .change_save_set(SetMode::INSERT, window)
+            .context("failed inserting window")?;
+        self.conn
+            .reparent_window(window, frame_window, 0, 20)
+            .context("failed reparenting window")?;
+        self.conn
+            .map_window(window)
+            .context("failed mapping window")?;
+        self.conn
+            .map_window(frame_window)
+            .context("failed mapping parent window")?;
+        self.conn
+            .ungrab_server()
+            .context("failed ungrabbing server")?;
 
         info!(
             "Managed window {window_name} on monitor {}, tag {}",
@@ -121,6 +139,65 @@ impl X11State {
 
         Ok(())
     }
+
+    pub fn handle_map_request(&mut self, event: &MapRequestEvent) -> Result<()> {
+        let geom = &self
+            .conn
+            .get_geometry(event.window)
+            .context("failed getting geometry")?
+            .reply()
+            .context("failed receiving geometry reply")?;
+
+        self.manage(
+            event.window,
+            Geometry::new(
+                geom.x as u32,
+                geom.y as u32,
+                geom.width as u32,
+                geom.height as u32,
+            ),
+        )
+    }
+
+    pub fn handle_event(&mut self, event: &Event) -> Result<()> {
+        info!("Event: {:#?}", event.clone());
+
+        match event {
+            Event::MapRequest(mr) => self.handle_map_request(mr)?,
+            _ => info!("(ignored)")
+        }
+
+        Ok(())
+    }
+
+    fn handle_event0(&mut self, event: &Event) -> Result<()> {
+        subsecond::call(move || self.handle_event(event))
+    }
+
+    pub fn event_loop(&mut self) -> Result<()> {
+        self.conn.flush().context("failed flushing")?;
+
+        loop {
+            subsecond::call::<Result<()>>(|| {
+                let event = self
+                    .conn
+                    .wait_for_event()
+                    .context("failed waiting for event")?;
+
+                self.handle_event0(&event)?;
+
+                while let Some(event) = self
+                    .conn
+                    .poll_for_event()
+                    .context("failed polling for event")?
+                {
+                    self.handle_event0(&event)?;
+                }
+
+                Ok(())
+            })?
+        }
+    }
 }
 
-static X11_STATE: OnceLock<X11State> = OnceLock::new();
+static X11_STATE: OnceLock<Mutex<X11State>> = OnceLock::new();

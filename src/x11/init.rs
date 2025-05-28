@@ -66,9 +66,9 @@ pub fn init_state(
     primary_screen: usize,
 ) -> Result<X11State> {
     let root_gc = conn.generate_id().context("failed generating root gc id")?;
-    let font = conn.generate_id().context("failed generating font id")?;
-    conn.open_font(font, b"9x15")
-        .context("failed opening font")?;
+    // let font = conn.generate_id().context("failed generating font id")?;
+    // conn.open_font(font, b"9x15")
+    //     .context("failed opening font")?;
 
     let screen = screens[primary_screen].clone();
 
@@ -76,11 +76,11 @@ pub fn init_state(
         .graphics_exposures(0)
         .background(screen.black_pixel)
         .foreground(screen.white_pixel)
-        .font(font);
+        /*.font(font)*/;
 
     conn.create_gc(root_gc, screen.root, &gc_aux)
         .context("failed creating root gc")?;
-    conn.close_font(font).context("failed closing font")?;
+    // conn.close_font(font).context("failed closing font")?;
 
     let wm_protocols = conn
         .intern_atom(false, b"WM_PROTOCOLS")
