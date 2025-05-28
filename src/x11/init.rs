@@ -8,8 +8,6 @@ use x11rb::{
     rust_connection::RustConnection,
 };
 
-use super::X11_STATE;
-
 pub fn become_wm(conn: &RustConnection, screen: &Screen) -> Result<()> {
     let change = ChangeWindowAttributesAux::default()
         .event_mask(EventMask::SUBSTRUCTURE_REDIRECT | EventMask::SUBSTRUCTURE_NOTIFY);
@@ -103,6 +101,7 @@ pub fn init_state(
         root_gc,
         wm_protocols,
         wm_delete_window,
+        primary_screen,
     };
 
     scan_existing_windows(&mut state, screens)?;

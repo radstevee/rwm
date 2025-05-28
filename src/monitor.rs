@@ -50,4 +50,9 @@ impl Monitor {
     pub fn tag(&self, tag: usize) -> &Tag {
         &self.tags[tag]
     }
+
+    /// Gets a mutable reference to the tag object for the given [`tag`].
+    pub fn tag_mut(&mut self, tag: usize) -> &mut Tag {
+        &mut self.tags[tag]
+    }
 }

@@ -1,6 +1,9 @@
 dpy:
 	Xephyr -br -ac -noreset -screen 800x600 :9 &
 
+kill-dpy:
+	killall Xephyr
+
 dev:
 	DISPLAY=:9 cargo run
 	

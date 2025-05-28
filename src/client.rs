@@ -22,6 +22,19 @@ pub struct Client {
 }
 
 impl Client {
+    /// Creates a new client for the given [`name`] and [`geometry`].
+    pub fn new(name: &'static str, geometry: Geometry) -> Client {
+        Client {
+            name,
+            geometry,
+            prev_geometry: geometry,
+            state: ClientState::default(),
+            prev_state: ClientState::default(),
+            #[cfg(feature = "x11")]
+            size_hints: SizeHints::default(), // TODO
+        }
+    }
+
     /// Renames this client to the given [`name`].
     pub fn rename(&mut self, name: &'static str) {
         self.name = name;
@@ -164,10 +177,31 @@ impl Client {
     pub fn prev_fullscreen(&self) -> bool {
         self.prev_state.fullscreen
     }
+
+    /// Finds the monitor this client should primarily be located on from the given [`monitor_geoms`]
+    /// and returns the index of the geometry in the given [`monitor_geoms`].
+    pub fn find_monitor(&self, monitor_geoms: Vec<Geometry>) -> u32 {
+        if monitor_geoms.is_empty() {
+            return 0;
+        }
+
+        monitor_geoms
+            .iter()
+            .enumerate()
+            .max_by(|(_, a), (_, b)| {
+                let a_overlap = a.overlap(self.geometry);
+                let b_overlap = b.overlap(self.geometry);
+                a_overlap
+                    .partial_cmp(&b_overlap)
+                    .unwrap_or(std::cmp::Ordering::Equal)
+            })
+            .map(|(idx, _)| idx as u32)
+            .unwrap_or_default()
+    }
 }
 
 /// X11 size hints of a client.
-#[derive(Clone, Copy, Debug, PartialEq, PartialOrd, Getters)]
+#[derive(Clone, Copy, Debug, PartialEq, PartialOrd, Getters, Default)]
 pub struct SizeHints {
     /// The base size.
     base: SizeDimensionHint,
@@ -184,7 +218,7 @@ pub struct SizeHints {
 }
 
 /// A dimension size hint.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Getters)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Getters, Default)]
 pub struct SizeDimensionHint {
     /// The width hint.
     width: u32,
@@ -194,7 +228,7 @@ pub struct SizeDimensionHint {
 }
 
 /// A size constraint size hint.
-#[derive(Clone, Copy, Debug, PartialEq, PartialOrd, Getters)]
+#[derive(Clone, Copy, Debug, PartialEq, PartialOrd, Getters, Default)]
 pub struct SizeConstraintHint {
     /// The min size.
     min: f32,
@@ -204,7 +238,7 @@ pub struct SizeConstraintHint {
 }
 
 /// The state of a client.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Getters)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Getters, Default)]
 pub struct ClientState {
     /// Whether this client is in a fixed position.
     fixed: bool,
