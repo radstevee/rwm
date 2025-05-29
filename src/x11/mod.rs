@@ -159,7 +159,7 @@ impl X11State {
         )
     }
 
-    pub fn handle_event(&mut self, event: &Event) -> Result<()> {
+    fn handle_event0(&mut self, event: &Event) -> Result<()> {
         info!("Event: {:#?}", event.clone());
 
         match event {
@@ -170,7 +170,7 @@ impl X11State {
         Ok(())
     }
 
-    fn handle_event0(&mut self, event: &Event) -> Result<()> {
+    pub fn handle_event(&mut self, event: &Event) -> Result<()> {
         subsecond::call(move || self.handle_event(event))
     }
 
@@ -184,14 +184,14 @@ impl X11State {
                     .wait_for_event()
                     .context("failed waiting for event")?;
 
-                self.handle_event0(&event)?;
+                self.handle_event(&event)?;
 
                 while let Some(event) = self
                     .conn
                     .poll_for_event()
                     .context("failed polling for event")?
                 {
-                    self.handle_event0(&event)?;
+                    self.handle_event(&event)?;
                 }
 
                 Ok(())
