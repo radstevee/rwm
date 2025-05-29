@@ -3,22 +3,19 @@ use std::sync::{Mutex, MutexGuard, OnceLock};
 use crate::prelude::*;
 use dioxus_devtools::subsecond;
 use init::{become_wm, init_state};
+use keyboard::mod_mask;
 use x11rb::{
-    COPY_DEPTH_FROM_PARENT, connect,
-    connection::Connection,
-    protocol::{
-        Event,
-        xproto::{
-            Atom, AtomEnum, ConnectionExt, CreateWindowAux, EventMask, Gcontext, MapRequestEvent,
-            SetMode, WindowClass,
-        },
-    },
-    rust_connection::RustConnection,
+    connect, connection::Connection, protocol::{
+        xinput::KeyCode, xproto::{
+            Atom, AtomEnum, ConnectionExt, CreateWindowAux, EventMask, Gcontext, GrabMode, InputFocus, MapRequestEvent, SetMode, WindowClass
+        }, Event
+    }, rust_connection::RustConnection, COPY_DEPTH_FROM_PARENT, CURRENT_TIME
 };
 
 pub mod atom;
 pub mod init;
 pub mod platform;
+pub mod keyboard;
 
 pub struct X11State {
     conn: RustConnection,
@@ -95,7 +92,9 @@ impl X11State {
                     | EventMask::BUTTON_PRESS
                     | EventMask::BUTTON_RELEASE
                     | EventMask::POINTER_MOTION
-                    | EventMask::ENTER_WINDOW,
+                    | EventMask::ENTER_WINDOW
+                    | EventMask::KEY_PRESS
+                    | EventMask::KEY_RELEASE,
             )
             .background_pixel(screen.white_pixel);
         self.conn
@@ -127,6 +126,12 @@ impl X11State {
         self.conn
             .map_window(frame_window)
             .context("failed mapping parent window")?;
+        self.conn
+            .set_input_focus(InputFocus::PARENT, frame_window, CURRENT_TIME)
+            .context("failed setting input focus to frame window")?;
+        self.conn
+            .grab_key(false, screen.root, mod_mask(), 0 /* any key */, GrabMode::ASYNC, GrabMode::ASYNC)
+            .context("failed grabbing keys")?;
         self.conn
             .ungrab_server()
             .context("failed ungrabbing server")?;
@@ -164,7 +169,7 @@ impl X11State {
 
         match event {
             Event::MapRequest(mr) => self.handle_map_request(mr)?,
-            _ => info!("(ignored)")
+            _ => info!("(ignored)"),
         }
 
         Ok(())

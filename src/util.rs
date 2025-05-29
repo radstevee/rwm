@@ -40,7 +40,7 @@ macro_rules! catching {
         match $e {
             std::result::Result::Ok(o) => o,
             std::result::Result::Err(e) => {
-                tracing::error!("{}: {:#?}", $what, e);
+                tracing::error!("{}: {:?}", $what, e);
                 std::process::exit(1)
             }
         }
@@ -50,7 +50,7 @@ macro_rules! catching {
         match $e {
             std::result::Result::Ok(o) => o,
             std::result::Result::Err(e) => {
-                tracing::error!("{}: {:#?}", format_args!($($what)+), e);
+                tracing::error!("{}: {:?}", format_args!($($what)+), e);
                 std::process::exit(1)
             }
         }

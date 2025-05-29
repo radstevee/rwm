@@ -1,8 +1,8 @@
 use std::{path::PathBuf, sync::OnceLock};
 
+use anyhow::anyhow;
 use figment::{
-    Figment,
-    providers::{Env, Format, Toml},
+    error::Kind, providers::{Env, Format, Toml}, Error, Figment
 };
 use serde::Deserialize;
 
@@ -13,12 +13,36 @@ use crate::prelude::*;
 pub struct MainConfig {
     /// Tag configuration.
     tags: TagsConfig,
+
+    /// Keyboard configuration.
+    keyboard: KeyboardConfig,
 }
 
 impl MainConfig {
     /// Validates all sections of this configuration file.
     pub fn validate(&self) -> Result<()> {
-        self.tags.validate()
+        self.tags.validate()?;
+        self.keyboard.validate()?;
+
+        Ok(())
+    }
+}
+
+/// Keyboard configuration.
+#[derive(Deserialize, Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Getters)]
+pub struct KeyboardConfig {
+    /// The modifier key.
+    mod_key: String,
+}
+
+impl KeyboardConfig {
+    /// Validates this section.
+    pub fn validate(&self) -> Result<()> {
+        if !matches!(&*self.mod_key, "super" | "alt" | "ctrl" | "meta" | "windows" | "win") {
+            bail!("invalid modifier key: {}", self.mod_key)
+        }
+
+        Ok(())
     }
 }
 
@@ -145,11 +169,35 @@ pub fn load_config(file: PathBuf) -> Result<MainConfig> {
         .merge(Toml::file(file))
         .merge(Env::prefixed("RWM_"))
         .extract::<MainConfig>()
+        .map_err(load_error_friendly)
         .context("failed loading config file")?;
 
     let _ = CONFIG.set(config.clone());
 
     Ok(config)
+}
+
+fn load_error_friendly(error: Error) -> anyhow::Error {
+    let path = if error.path.is_empty() {
+        "root"
+    } else {
+        &error.path.join(".")
+    };
+
+    match error.kind {
+        Kind::MissingField(field) => anyhow!("missing field at {path}: {field}"),
+        Kind::Message(msg) => anyhow!("error at {path}: {msg}"),
+        Kind::InvalidType(actual, expected) => anyhow!("invalid type at {path}: {actual}, {expected} was expected"),
+        Kind::InvalidValue(actual, expected) => anyhow!("invald value at {path}: {actual}, {expected} was expected"),
+        Kind::InvalidLength(len, expected) => anyhow!("invalid length at {path}: {len}, {expected} was expected"),
+        Kind::UnknownVariant(actual, expected) => anyhow!("unknown variant at {path}: {actual}, one of {expected:?} was expected"),
+        Kind::UnknownField(actual, expected) => anyhow!("unknown field at {path}: {actual}, one of {expected:?} was expected"),
+        Kind::DuplicateField(field) => anyhow!("duplicated field at {path}: {field}"),
+        Kind::ISizeOutOfRange(value) => anyhow!("isize out of range at {path}: {value}"),
+        Kind::USizeOutOfRange(value) => anyhow!("usize out of range at {path}: {value}"),
+        Kind::Unsupported(actual) => anyhow!("unsupported type at {path}: {actual}"),
+        Kind::UnsupportedKey(actual, expected) => anyhow!("unsupported key at {path}: {actual}, {expected:?} was expected")
+    }
 }
 
 /// Gets the loaded configuration file, or panic if it does not exist.

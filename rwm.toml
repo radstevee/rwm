@@ -13,3 +13,6 @@ label_6 = "6"
 label_7 = "7"
 label_8 = "8"
 label_9 = "9"
+
+[keyboard]
+mod_key = "super"
