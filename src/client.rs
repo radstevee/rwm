@@ -16,6 +16,9 @@ pub struct Client {
     /// The previous state of this client.
     prev_state: ClientState,
 
+    /// The frame window, responsible for drawing the borders and decorations.
+    frame: Window,
+
     /// The size hints of this client. X11 only.
     #[cfg(feature = "x11")]
     size_hints: SizeHints,
@@ -23,13 +26,14 @@ pub struct Client {
 
 impl Client {
     /// Creates a new client for the given [`name`] and [`geometry`].
-    pub fn new(name: &'static str, geometry: Geometry) -> Client {
+    pub fn new(name: &'static str, geometry: Geometry, frame: Window) -> Client {
         Client {
             name,
             geometry,
             prev_geometry: geometry,
             state: ClientState::default(),
             prev_state: ClientState::default(),
+            frame,
             #[cfg(feature = "x11")]
             size_hints: SizeHints::default(), // TODO
         }
@@ -180,7 +184,7 @@ impl Client {
 
     /// Finds the monitor this client should primarily be located on from the given [`monitor_geoms`]
     /// and returns the index of the geometry in the given [`monitor_geoms`].
-    pub fn find_monitor(&self, monitor_geoms: Vec<Geometry>) -> u32 {
+    pub fn find_monitor(client_geometry: Geometry, monitor_geoms: Vec<Geometry>) -> u32 {
         if monitor_geoms.is_empty() {
             return 0;
         }
@@ -189,8 +193,8 @@ impl Client {
             .iter()
             .enumerate()
             .max_by(|(_, a), (_, b)| {
-                let a_overlap = a.overlap(self.geometry);
-                let b_overlap = b.overlap(self.geometry);
+                let a_overlap = a.overlap(client_geometry);
+                let b_overlap = b.overlap(client_geometry);
                 a_overlap
                     .partial_cmp(&b_overlap)
                     .unwrap_or(std::cmp::Ordering::Equal)

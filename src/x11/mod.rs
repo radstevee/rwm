@@ -1,21 +1,21 @@
 use std::sync::{Mutex, MutexGuard, OnceLock};
 
 use crate::prelude::*;
-use dioxus_devtools::subsecond;
+use dioxus_devtools::subsecond::call;
 use init::{become_wm, init_state};
 use keyboard::mod_mask;
 use x11rb::{
     connect, connection::Connection, protocol::{
-        xinput::KeyCode, xproto::{
-            Atom, AtomEnum, ConnectionExt, CreateWindowAux, EventMask, Gcontext, GrabMode, InputFocus, MapRequestEvent, SetMode, WindowClass
+        xproto::{
+            Atom, AtomEnum, ConnectionExt, CreateWindowAux, EventMask, Gcontext, GrabMode, MapRequestEvent, SetMode, WindowClass
         }, Event
-    }, rust_connection::RustConnection, COPY_DEPTH_FROM_PARENT, CURRENT_TIME
+    }, rust_connection::RustConnection, wrapper::ConnectionExt as _, COPY_DEPTH_FROM_PARENT
 };
 
 pub mod atom;
 pub mod init;
-pub mod platform;
 pub mod keyboard;
+pub mod platform;
 
 pub struct X11State {
     conn: RustConnection,
@@ -70,21 +70,17 @@ impl X11State {
         info!("Managing window {window} (geom: {geom:#?}");
 
         let window_name = self.window_name(window)?.leak();
-        let client = Client::new(window_name, geom); // FIXME: is it fine to leak?
         let monitor_idx =
-            client.find_monitor(self.monitors.iter().map(Monitor::dimensions).collect());
+            Client::find_monitor(geom, self.monitors.iter().map(Monitor::dimensions).collect());
 
         let monitor = self
             .monitors
             .get_mut(monitor_idx as usize)
             .context("monitor was removed whilst starting to manage a window")?;
 
-        let tag = monitor.tag_mut(0); // TODO: tags
-
-        tag.clients_mut().push(client);
-
         let screen = &self.conn.setup().roots[self.primary_screen];
         let frame_window = self.conn.generate_id()?;
+        let config = config();
         let win_aux = CreateWindowAux::new()
             .event_mask(
                 EventMask::EXPOSURE
@@ -92,49 +88,76 @@ impl X11State {
                     | EventMask::BUTTON_PRESS
                     | EventMask::BUTTON_RELEASE
                     | EventMask::POINTER_MOTION
-                    | EventMask::ENTER_WINDOW
-                    | EventMask::KEY_PRESS
-                    | EventMask::KEY_RELEASE,
+                    | EventMask::ENTER_WINDOW,
             )
-            .background_pixel(screen.white_pixel);
+            .background_pixel(config
+                .clone()
+                .border()
+                .selected_color()
+                .hex_value()
+                .unwrap()
+            );
+
+        let border_width = config.border().width() as i16;
         self.conn
             .create_window(
                 COPY_DEPTH_FROM_PARENT,
                 frame_window,
                 screen.root,
-                geom.x() as i16,
-                geom.y() as i16,
-                geom.width() as u16,
-                geom.height() as u16 + 20,
-                1,
+                (geom.x() as i16) - border_width,
+                (geom.y() as i16) - border_width,
+                (geom.width() as u16) + 2 * border_width as u16,
+                (geom.height() as u16) + 2 * border_width as u16,
+                0,
                 WindowClass::INPUT_OUTPUT,
                 0,
                 &win_aux,
             )
             .context("failed creating frame window")?;
 
-        self.conn.grab_server().context("failed grabbing server")?;
+        self.conn
+            .grab_server()
+            .context("failed grabbing server")?;
         self.conn
             .change_save_set(SetMode::INSERT, window)
             .context("failed inserting window")?;
-        self.conn
-            .reparent_window(window, frame_window, 0, 20)
+         self.conn
+            .reparent_window(
+                window,
+                frame_window,
+                // border_width as i16,
+                // border_width as i16
+                10, 10
+            )
             .context("failed reparenting window")?;
         self.conn
             .map_window(window)
             .context("failed mapping window")?;
         self.conn
             .map_window(frame_window)
-            .context("failed mapping parent window")?;
+            .context("failed mapping frame window")?;
         self.conn
-            .set_input_focus(InputFocus::PARENT, frame_window, CURRENT_TIME)
-            .context("failed setting input focus to frame window")?;
-        self.conn
-            .grab_key(false, screen.root, mod_mask(), 0 /* any key */, GrabMode::ASYNC, GrabMode::ASYNC)
+            .grab_key(
+                false,
+                screen.root,
+                mod_mask(),
+                0, /* any key */
+                GrabMode::ASYNC,
+                GrabMode::ASYNC,
+            )
             .context("failed grabbing keys")?;
         self.conn
             .ungrab_server()
             .context("failed ungrabbing server")?;
+
+        self.conn
+            .sync()
+            .context("failed synchronising")?;
+
+        let tag = monitor.tag_mut(0); // TODO: tags
+        let client = Client::new(window_name, geom, frame_window); // FIXME: is it fine to leak?
+
+        tag.clients_mut().push(client);
 
         info!(
             "Managed window {window_name} on monitor {}, tag {}",
@@ -164,39 +187,35 @@ impl X11State {
         )
     }
 
-    fn handle_event0(&mut self, event: &Event) -> Result<()> {
-        info!("Event: {:#?}", event.clone());
-
+    pub fn handle_event(&mut self, event: &Event) -> Result<()> {
+        info!("event: {:?}", event.clone());
         match event {
             Event::MapRequest(mr) => self.handle_map_request(mr)?,
-            _ => info!("(ignored)"),
+            Event::KeyPress(key) => info!("key press: {key:#?}"),
+            _ => info!("(ignored event)"),
         }
 
         Ok(())
-    }
-
-    pub fn handle_event(&mut self, event: &Event) -> Result<()> {
-        subsecond::call(move || self.handle_event(event))
     }
 
     pub fn event_loop(&mut self) -> Result<()> {
         self.conn.flush().context("failed flushing")?;
 
         loop {
-            subsecond::call::<Result<()>>(|| {
+            call::<Result<_>>(|| {
                 let event = self
                     .conn
                     .wait_for_event()
                     .context("failed waiting for event")?;
 
-                self.handle_event(&event)?;
+                call::<Result<_>>(|| self.handle_event(&event))?;
 
                 while let Some(event) = self
                     .conn
                     .poll_for_event()
                     .context("failed polling for event")?
                 {
-                    self.handle_event(&event)?;
+                    call::<Result<_>>(|| self.handle_event(&event))?;
                 }
 
                 Ok(())
