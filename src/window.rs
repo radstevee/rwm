@@ -1,5 +1,3 @@
-#[cfg(feature = "x11")]
-pub type Window = x11rb::protocol::xproto::Window;
+/// A window identified by its ID.
+pub type Window = u32;
 
-#[cfg(not(feature = "x11"))]
-crate::wayland_unimplemented!();

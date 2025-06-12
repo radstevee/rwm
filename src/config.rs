@@ -11,7 +11,7 @@ use serde::Deserialize;
 use crate::prelude::*;
 
 /// Main configuration file.
-#[derive(Deserialize, Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Getters)]
+#[derive(Deserialize, Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Getters, Resource)]
 pub struct MainConfig {
     /// Tag configuration.
     #[serde(default)]
@@ -43,6 +43,27 @@ impl MainConfig {
         self.border.validate()?;
 
         Ok(())
+    }
+}
+
+impl FromWorld for MainConfig {
+    fn from_world(world: &mut World) -> Self {
+        let cli = world.resource::<Cli>().clone();
+
+        let config_file = cli.config_file.unwrap_or(PathBuf::from("rwm.toml"));
+        let config_file_path = config_file.to_string();
+
+        info!("loading configuration file {}", config_file_path);
+        let config = catching!(
+            ("failed loading configuration file: {}", config_file_path),
+            load_config(config_file)
+        );
+
+        catching!("failed validating configuration file", config.validate());
+
+        debug!("configuration file: {:#?}", config.clone());
+
+        config
     }
 }
 
@@ -268,19 +289,19 @@ impl TagsConfig {
 /// A colour that can be represented by RGB, hex value or a hex string.
 #[derive(Deserialize, Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 #[serde(untagged)]
-pub enum Color {
+pub enum ConfigColor {
     Rgb(u8, u8, u8),
     Hex(u32),
     HexString(String),
 }
 
-impl Default for Color {
+impl Default for ConfigColor {
     fn default() -> Self {
         Self::Hex(0xFFFFFF)
     }
 }
 
-impl Color {
+impl ConfigColor {
     /// Gets the hex value of this colour.
     pub fn hex_value(&self) -> Result<u32> {
         match self {
@@ -306,11 +327,11 @@ pub struct BorderConfig {
 
     /// The selected border colour.
     #[serde(default)]
-    selected_color: Color,
+    selected_color: ConfigColor,
 
     /// The inactive border colour.
     #[serde(default)]
-    inactive_color: Color,
+    inactive_color: ConfigColor,
 
     /// The border width.
     #[serde(default)]

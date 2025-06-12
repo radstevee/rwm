@@ -1,6 +1,7 @@
 [tags]
 # All tags that are enabled. There can be up to ten tags.
-enabled_tags = [1, 2, 3, 4, 5, 6, 7, 8, 9]
+enabled_tags = [1]
+# enabled_tags = [1, 2, 3, 4, 5, 6, 7, 8, 9]
 
 # Labels for these tags. You don't need to specify labels for unused tags.
 
@@ -22,5 +23,5 @@ key = "h"
 exec = "hello"
 
 [border]
-width = 10
-selected_color = 0x94F7C5
+width = 5
+selected_color = 0x86aaec

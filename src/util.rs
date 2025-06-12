@@ -1,9 +1,5 @@
 use std::path::PathBuf;
 
-use chrono::Local;
-use tracing_subscriber::fmt::format::Writer;
-use tracing_subscriber::fmt::time::FormatTime;
-
 /// Creates a zeroed out u8 array of size [`N`].
 pub const fn zeroed<const N: usize>() -> [u8; N] {
     let mut arr = [0; N];
@@ -38,9 +34,9 @@ macro_rules! wayland_unimplemented {
 macro_rules! catching {
     ($what:literal, $e:expr) => {
         match $e {
-            std::result::Result::Ok(o) => o,
-            std::result::Result::Err(e) => {
-                tracing::error!("{}: {:?}", $what, e);
+            Ok(o) => o,
+            Err(e) => {
+                error!("{}: {:?}", $what, e);
                 std::process::exit(1)
             }
         }
@@ -48,9 +44,9 @@ macro_rules! catching {
 
     (($($what:tt)+), $e:expr) => {
         match $e {
-            std::result::Result::Ok(o) => o,
-            std::result::Result::Err(e) => {
-                tracing::error!("{}: {:?}", format_args!($($what)+), e);
+            Ok(o) => o,
+            Err(e) => {
+                error!("{}: {:?}", format_args!($($what)+), e);
                 std::process::exit(1)
             }
         }
@@ -61,7 +57,7 @@ macro_rules! catching {
 macro_rules! die {
     ($($body:tt)+) => {
         {
-            tracing::error!($($body)+);
+            error!($($body)+);
             std::process::exit(1);
         }
     };
@@ -75,12 +71,21 @@ macro_rules! dev_only {
     }
 }
 
-/// A HH:MM:SS time formatter for tracing_subscriber.
-pub struct TimeFormatter;
+#[macro_export]
+macro_rules! wrapper {
+    ($name:ident($inner:ty)) => {
+        #[doc = concat!("A wrapper around [`", stringify!($inner), "`] that can be used as a component or resource.")]
+        #[derive(Resource)]
+        #[derive(Component)]
+        pub struct $name(pub $inner);
 
-impl FormatTime for TimeFormatter {
-    fn format_time(&self, w: &mut Writer<'_>) -> std::fmt::Result {
-        let date = Local::now();
-        write!(w, "{}", date.format("%H:%M:%S"))
-    }
+        impl std::ops::Deref for $name {
+            type Target = $inner;
+
+            fn deref(&self) -> &Self::Target {
+                &self.0
+            }
+        }
+    };
 }
+

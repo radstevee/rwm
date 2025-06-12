@@ -1,7 +1,7 @@
 use crate::prelude::*;
 
 /// A client is a window that rwm manages.
-#[derive(Debug, Clone, Copy, PartialEq, Getters, PartialOrd)]
+#[derive(Debug, Clone, Copy, Getters, PartialOrd, Component)]
 pub struct Client {
     /// The name of this client.
     name: &'static str,
@@ -19,14 +19,26 @@ pub struct Client {
     /// The frame window, responsible for drawing the borders and decorations.
     frame: Window,
 
+    /// The underlying window of this client.
+    window: Window,
+
     /// The size hints of this client. X11 only.
     #[cfg(feature = "x11")]
     size_hints: SizeHints,
 }
 
+impl PartialEq for Client {
+    fn eq(&self, other: &Self) -> bool {
+        self.window == other.window
+    }
+}
+
+impl Eq for Client {
+}
+
 impl Client {
     /// Creates a new client for the given [`name`] and [`geometry`].
-    pub fn new(name: &'static str, geometry: Geometry, frame: Window) -> Client {
+    pub fn new(name: &'static str, geometry: Geometry, window: Window, frame: Window) -> Client {
         Client {
             name,
             geometry,
@@ -34,6 +46,7 @@ impl Client {
             state: ClientState::default(),
             prev_state: ClientState::default(),
             frame,
+            window,
             #[cfg(feature = "x11")]
             size_hints: SizeHints::default(), // TODO
         }

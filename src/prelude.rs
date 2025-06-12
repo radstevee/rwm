@@ -13,6 +13,7 @@ pub use crate::tag::*;
 pub use crate::tagset::*;
 pub use crate::util::*;
 pub use crate::window::*;
+pub use crate::cli::*;
 
 // X11 impls
 #[cfg(feature = "x11")]
@@ -27,13 +28,15 @@ pub use crate::catching;
 pub use crate::dev_only;
 pub use crate::die;
 pub use crate::wayland_unimplemented;
+pub use crate::wrapper;
 
 // Libraries and utilities
 pub use anyhow::{Result, Error, Context, bail};
 pub use derive_constructors::*;
 pub use derive_getters::*;
 pub use derive_setters::*;
-pub use tracing::*;
-
+pub use bevy::prelude::*;
 pub use std::result::Result::*;
+
+pub use crate::platform::PLATFORM;
 

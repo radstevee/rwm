@@ -3,26 +3,25 @@ use x11rb::{
     connection::Connection,
     errors::ReplyError,
     protocol::{
-        xproto::{ChangeWindowAttributesAux, ConnectionExt, CreateGCAux, EventMask, MapState, Screen}, ErrorKind
+        ErrorKind,
+        xproto::{
+            ChangeWindowAttributesAux, ConnectionExt, CreateGCAux, EventMask, MapState, Screen,
+        },
     },
     rust_connection::RustConnection,
 };
 
-pub fn become_wm(conn: &RustConnection, screen: &Screen) -> Result<()> {
+pub fn become_wm(conn: &RustConnection, screen: &Screen) {
     let change = ChangeWindowAttributesAux::default()
         .event_mask(EventMask::SUBSTRUCTURE_REDIRECT | EventMask::SUBSTRUCTURE_NOTIFY);
     let res = conn
         .change_window_attributes(screen.root, &change)
-        .context("failed changing root window attributes")?
+        .unwrap()
         .check();
     if let Err(ReplyError::X11Error(ref error)) = res {
         if error.error_kind == ErrorKind::Access {
             die!("another WM is already running");
-        } else {
-            Ok(())
         }
-    } else {
-        Ok(res?)
     }
 }
 
@@ -60,27 +59,18 @@ pub fn load_monitors(screens: Vec<Screen>) -> Vec<Monitor> {
     monitors
 }
 
-pub fn init_state(
-    conn: RustConnection,
-    screens: Vec<Screen>,
-    primary_screen: usize,
-) -> Result<X11State> {
+pub fn init(world: &mut World, conn: RustConnection, screens: Vec<Screen>) -> Result<X11State> {
     let root_gc = conn.generate_id().context("failed generating root gc id")?;
-    // let font = conn.generate_id().context("failed generating font id")?;
-    // conn.open_font(font, b"9x15")
-    //     .context("failed opening font")?;
 
-    let screen = screens[primary_screen].clone();
+    let screen = screens[0].clone();
 
     let gc_aux = CreateGCAux::new()
         .graphics_exposures(0)
         .background(screen.black_pixel)
-        .foreground(screen.white_pixel)
-        /*.font(font)*/;
+        .foreground(screen.white_pixel);
 
     conn.create_gc(root_gc, screen.root, &gc_aux)
         .context("failed creating root gc")?;
-    // conn.close_font(font).context("failed closing font")?;
 
     let wm_protocols = conn
         .intern_atom(false, b"WM_PROTOCOLS")
@@ -88,20 +78,21 @@ pub fn init_state(
         .reply()
         .context("failed receiving WM_PROTOCOLS reply")?
         .atom;
+    world.insert_resource(NetWMProtocols(wm_protocols));
+
     let wm_delete_window = conn
         .intern_atom(false, b"WM_DELETE_WINDOW")
         .context("failed fetching WM_DELETE_WINDOW")?
         .reply()
         .context("failed receiving WM_DELETE_WINDOW reply")?
         .atom;
+    world.insert_resource(NetWMDeleteWindow(wm_delete_window));
 
     let mut state = X11State {
         conn,
         monitors: load_monitors(screens.clone()),
-        root_gc,
-        wm_protocols,
-        wm_delete_window,
-        primary_screen,
+        root_window: screen.root,
+        dragging: None,
     };
 
     scan_existing_windows(&mut state, screens)?;
@@ -148,4 +139,3 @@ pub fn scan_existing_windows(state: &mut X11State, screens: Vec<Screen>) -> Resu
 
     Ok(())
 }
-

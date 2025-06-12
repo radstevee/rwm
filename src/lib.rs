@@ -10,6 +10,7 @@ pub mod tag;
 pub mod tagset;
 pub mod util;
 pub mod window;
+pub mod cli;
 
 pub mod prelude;
 

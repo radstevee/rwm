@@ -2,7 +2,7 @@ use crate::prelude::*;
 
 /// A monitor represents a screen, whether physical or emulated. A monitor can hold [`MAX_TAGS`] amount
 /// of tags, which can each hold clients.
-#[derive(Clone, Debug, PartialEq, Getters)]
+#[derive(Clone, Debug, PartialEq, Getters, Component)]
 #[constructor(named(new), fields(idx, tags, dimensions))]
 pub struct Monitor {
     /// The index of this monitor.
@@ -54,5 +54,10 @@ impl Monitor {
     /// Gets a mutable reference to the tag object at the given [`tag_idx`].
     pub fn tag_mut(&mut self, tag_idx: usize) -> &mut Tag {
         &mut self.tags[tag_idx]
+    }
+
+    /// Gets a mutable reference to this monitor's tags.
+    pub fn tags_mut(&mut self) -> &mut Vec<Tag> {
+        &mut self.tags
     }
 }
