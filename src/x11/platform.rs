@@ -1,4 +1,7 @@
-use x11rb::protocol::xproto::{ConfigureWindowAux, ConnectionExt};
+use x11rb::{
+    connection::Connection,
+    protocol::xproto::{ConfigureWindowAux, ConnectionExt},
+};
 
 use crate::prelude::*;
 
@@ -16,14 +19,6 @@ impl Platform for X11 {
         state: &mut Self::State,
     ) -> Result<()> {
         let border_width = config.border().width() as i16;
-        state.conn.configure_window(
-            window,
-            &ConfigureWindowAux::new()
-                .x(geometry.x())
-                .y(geometry.y())
-                .width(geometry.width())
-                .height(geometry.height()),
-        )?;
 
         state.conn.configure_window(
             window,
@@ -42,6 +37,8 @@ impl Platform for X11 {
             (border_width as f32 * 1.5) as i16,
             (border_width as f32 * 1.5) as i16,
         )?;
+
+        state.conn.flush()?;
         Ok(())
     }
 
@@ -94,6 +91,7 @@ impl Plugin for X11 {
                     handle_button_press,
                     handle_button_release,
                     handle_error,
+                    flush,
                 )
                     .chain(),
             );

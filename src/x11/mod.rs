@@ -20,7 +20,7 @@ pub mod platform;
 
 wrapper!(X11Connection(Arc<RustConnection>));
 wrapper!(MainRootWindow(Window));
-wrapper!(Dragging(bool));
+wrapper!(Dragging(Option<(Window, i16, i16)>));
 
 #[derive(Resource)]
 pub struct X11State {
@@ -128,7 +128,7 @@ impl X11State {
             .grab_button(
                 false,
                 root_window,
-                EventMask::BUTTON_PRESS | EventMask::BUTTON_RELEASE,
+                EventMask::BUTTON_PRESS | EventMask::BUTTON_RELEASE | EventMask::BUTTON1_MOTION,
                 GrabMode::ASYNC,
                 GrabMode::ASYNC,
                 root_window,
@@ -194,4 +194,9 @@ impl X11State {
 
         Ok(())
     }
+}
+
+pub(crate) fn flush(conn: Res<X11Connection>) -> Result<()> {
+    conn.flush()?;
+    Ok(())
 }

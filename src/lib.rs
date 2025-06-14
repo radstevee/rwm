@@ -11,7 +11,6 @@ pub mod monitor;
 pub mod tag;
 pub mod tagset;
 pub mod tiling;
-pub mod update;
 pub mod util;
 pub mod window;
 

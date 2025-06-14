@@ -6,10 +6,10 @@ use crate::prelude::*;
 #[constructor(named(new), fields(x, y, width, height))]
 pub struct Geometry {
     /// The x position.
-    x: i32,
+    pub x: i32,
 
     /// The y position.
-    y: i32,
+    pub y: i32,
 
     /// The width.
     width: u32,

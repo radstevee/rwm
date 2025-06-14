@@ -13,8 +13,7 @@ derive_setters = "0.1.7"
 figment = { version = "0.10.19", features = ["env", "toml"] }
 serde = { version = "1.0.219", features = ["derive"] }
 x11rb = { version = "0.13.1", optional = true, features = ["all-extensions"]}
-dioxus-devtools = { git = "https://github.com/DioxusLabs/dioxus" }
-bevy = { version = "0.16.1", default-features = false, features = ["bevy_state", "bevy_log"] }
+bevy = { git = "https://github.com/bevyengine/bevy", default-features = false, features = ["bevy_state", "bevy_log", "hotpatching"] }
 
 [features]
 default = ["x11"]

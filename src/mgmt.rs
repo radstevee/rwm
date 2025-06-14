@@ -11,10 +11,21 @@ pub fn handle_unmanage(
 ) {
     for (client, window, geometry, frame) in clients {
         for mut tags in &mut monitors {
-            let mut tag = tags.get_mut(0).unwrap(); // TODO: tagging
-            
-            if let Err(e) = CurrentPlatform::unmanage(client, **window, *geometry, **frame, **root_window, &mut tag, &mut state) {
-                error!("failed unmanaging window {}: {e:?} - this may lead to undefined behaviour", **window);
+            let tag = tags.get_mut(0).unwrap(); // TODO: tagging
+
+            if let Err(e) = CurrentPlatform::unmanage(
+                client,
+                **window,
+                *geometry,
+                **frame,
+                **root_window,
+                tag,
+                &mut state,
+            ) {
+                error!(
+                    "failed unmanaging window {}: {e:?} - this may lead to undefined behaviour",
+                    **window
+                );
             }
         }
     }

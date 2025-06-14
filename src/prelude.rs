@@ -12,7 +12,6 @@ pub use crate::monitor::*;
 pub use crate::platform::*;
 pub use crate::tag::*;
 pub use crate::tagset::*;
-pub use crate::update::*;
 pub use crate::util::*;
 pub use crate::window::*;
 

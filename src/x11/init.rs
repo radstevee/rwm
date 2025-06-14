@@ -17,12 +17,12 @@ wrapper!(ScreenNumber(usize));
 
 pub fn connect(mut commands: Commands) {
     let (conn, screen_num) = catching!("failed connecting to x11", x11rb::connect(None));
-    let screens = (&conn).setup().roots.clone();
+    let screens = conn.setup().roots.clone();
     commands.insert_resource(AvailableScreens(screens.clone()));
     commands.insert_resource(MainRootWindow(screens[screen_num].root));
     commands.insert_resource(X11Connection(Arc::new(conn)));
-    commands.insert_resource(ScreenNumber(screen_num as usize));
-    commands.insert_resource(Dragging(false));
+    commands.insert_resource(ScreenNumber(screen_num));
+    commands.insert_resource(Dragging(None));
 }
 
 pub fn become_wm(
@@ -119,7 +119,9 @@ pub fn init(
         .atom;
     commands.insert_resource(NetWMDeleteWindow(wm_delete_window));
 
-    let state = X11State { conn: X11Connection(conn.clone()) };
+    let state = X11State {
+        conn: X11Connection(conn.clone()),
+    };
 
     commands.insert_resource(state);
 
@@ -165,12 +167,12 @@ pub fn scan_existing_windows(
                 );
 
                 for mut tags in &mut monitors {
-                    let mut tag = tags.get_mut(0).unwrap();
-                    state.manage(win, geometry, screen.root, &mut tag, &mut commands)?;
+                    let tag = tags.get_mut(0).unwrap();
+                    state.manage(win, geometry, screen.root, tag, &mut commands)?;
                 }
             }
         }
     }
-    
+
     Ok(())
 }
