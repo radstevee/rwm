@@ -8,65 +8,64 @@ pub struct X11;
 impl Platform for X11 {
     type State = X11State;
 
-    fn init(world: &mut World) {
-        let monitors = {
-            let mut state = world.resource_mut::<Self::State>();
-            println!("{:#?}", state.monitors.clone());
-            std::mem::take(&mut state.monitors)
-        };
-
-        info!("Found {} monitors", monitors.len());
-        for monitor in &monitors {
-            world.spawn(monitor.clone());
-        }
-
-        let mut state = world.resource_mut::<Self::State>();
-        state.monitors = monitors;
-    }
-
     fn update_client_geometry(
-        config: Res<MainConfig>,
-        query: Query<(&Geometry, &ClientWindow, &ClientFrame), With<Client>>,
+        config: &MainConfig,
+        geometry: Geometry,
+        window: Window,
+        frame: Window,
         state: &mut Self::State,
     ) -> Result<()> {
         let border_width = config.border().width() as i16;
-        for (geom, window, frame) in query {
-            state.conn.configure_window(
-                **window,
-                &ConfigureWindowAux::new()
-                    .x(geom.x())
-                    .y(geom.y())
-                    .width(geom.width())
-                    .height(geom.height()),
-            )?;
+        state.conn.configure_window(
+            window,
+            &ConfigureWindowAux::new()
+                .x(geometry.x())
+                .y(geometry.y())
+                .width(geometry.width())
+                .height(geometry.height()),
+        )?;
 
-            state.conn.configure_window(
-                **window,
-                &ConfigureWindowAux::new()
-                    .x(((geom.x() as i16) - border_width) as i32)
-                    .y(((geom.y() as i16) - border_width) as i32)
-                    .width(((geom.width() as i16) + 2 * border_width) as u32)
-                    .height(((geom.height() as i16) + 2 * border_width) as u32),
-            )?;
+        state.conn.configure_window(
+            window,
+            &ConfigureWindowAux::new()
+                // what the fuck
+                .x(((geometry.x() as i16) - border_width) as i32)
+                .y(((geometry.y() as i16) - border_width) as i32)
+                .width(((geometry.width() as i16) + 2 * border_width) as u32)
+                .height(((geometry.height() as i16) + 2 * border_width) as u32),
+        )?;
 
-            state.conn.reparent_window(
-                **window,
-                **frame,
-                // ??? why the fuck X11
-                (border_width as f32 * 1.5) as i16,
-                (border_width as f32 * 1.5) as i16,
-            )?;
-        }
+        state.conn.reparent_window(
+            window,
+            frame,
+            // ??? why the fuck X11
+            (border_width as f32 * 1.5) as i16,
+            (border_width as f32 * 1.5) as i16,
+        )?;
         Ok(())
     }
 
     fn manage(
         window: Window,
         geometry: Geometry,
+        root_window: Window,
+        tag: &mut Tag,
         commands: &mut Commands,
         state: &mut Self::State,
     ) -> Result<Entity> {
-        state.manage(window, geometry, commands)
+        state.manage(window, geometry, root_window, tag, commands)
+    }
+
+    fn unmanage(
+        client: Entity,
+        window: Window,
+        geometry: Geometry,
+        frame: Window,
+        root_window: Window,
+        tag: &mut Tag,
+        state: &mut Self::State,
+    ) -> Result<()> {
+        state.unmanage(client, window, geometry, frame, root_window, tag)
     }
 }
 
@@ -80,8 +79,11 @@ impl Plugin for X11 {
                     become_wm,
                     load_monitors,
                     init,
+                    scan_existing_windows,
                 )
+                    .chain(),
             )
+            .add_systems(First, poll_events)
             .add_systems(
                 Update,
                 (
@@ -93,7 +95,7 @@ impl Plugin for X11 {
                     handle_button_release,
                     handle_error,
                 )
-                    .after(poll_events),
+                    .chain(),
             );
     }
 

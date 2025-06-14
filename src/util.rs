@@ -86,5 +86,11 @@ macro_rules! wrapper {
                 &self.0
             }
         }
+        
+        impl std::ops::DerefMut for $name {
+            fn deref_mut(&mut self) -> &mut Self::Target {
+                &mut self.0
+            }
+        }
     };
 }

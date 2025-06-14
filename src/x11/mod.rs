@@ -1,6 +1,8 @@
+use std::sync::Arc;
+
 use crate::prelude::*;
 use x11rb::{
-    COPY_DEPTH_FROM_PARENT, connect,
+    COPY_DEPTH_FROM_PARENT,
     connection::Connection,
     protocol::xproto::{
         AtomEnum, ButtonIndex, ConnectionExt, CreateWindowAux, EventMask, GrabMode, SetMode,
@@ -16,13 +18,13 @@ pub mod init;
 pub mod keyboard;
 pub mod platform;
 
-wrapper!(X11Connection(RustConnection));
+wrapper!(X11Connection(Arc<RustConnection>));
 wrapper!(MainRootWindow(Window));
+wrapper!(Dragging(bool));
 
 #[derive(Resource)]
 pub struct X11State {
-    conn: RustConnection,
-    dragging: Option<(Window, (/* x */ i32, /* y */ i32))>,
+    conn: X11Connection,
 }
 
 impl X11State {
@@ -47,21 +49,14 @@ impl X11State {
     pub fn manage(
         &mut self,
         window: Window,
-        geom: Geometry,
+        geometry: Geometry,
+        root_window: Window,
+        tag: &mut Tag,
         commands: &mut Commands,
     ) -> Result<Entity> {
-        info!("Managing window {window} (geom: {geom:#?}");
+        info!("Managing window {window} (geom: {geometry:#?}");
 
         let window_name = self.window_name(window)?.to_string();
-        let monitor_idx = find_monitor(
-            geom,
-            self.monitors.iter().map(Monitor::dimensions).collect(),
-        );
-
-        let monitor = self
-            .monitors
-            .get_mut(monitor_idx as usize)
-            .context("monitor was removed whilst starting to manage a window")?;
 
         let frame_window = self.conn.generate_id()?;
         let config = config();
@@ -88,11 +83,11 @@ impl X11State {
             .create_window(
                 COPY_DEPTH_FROM_PARENT,
                 frame_window,
-                self.root_window,
-                (geom.x() as i16) - border_width,
-                (geom.y() as i16) - border_width,
-                (geom.width() as u16) + 2 * border_width as u16,
-                (geom.height() as u16) + 2 * border_width as u16,
+                root_window,
+                (geometry.x() as i16) - border_width,
+                (geometry.y() as i16) - border_width,
+                (geometry.width() as u16) + 2 * border_width as u16,
+                (geometry.height() as u16) + 2 * border_width as u16,
                 0,
                 WindowClass::INPUT_OUTPUT,
                 0,
@@ -122,7 +117,7 @@ impl X11State {
         self.conn
             .grab_key(
                 false,
-                self.root_window,
+                root_window,
                 mod_mask(),
                 0, /* any key */
                 GrabMode::ASYNC,
@@ -132,11 +127,11 @@ impl X11State {
         self.conn
             .grab_button(
                 false,
-                self.root_window,
+                root_window,
                 EventMask::BUTTON_PRESS | EventMask::BUTTON_RELEASE,
                 GrabMode::ASYNC,
                 GrabMode::ASYNC,
-                self.root_window,
+                root_window,
                 0u32,
                 ButtonIndex::ANY,
                 mod_mask(),
@@ -148,12 +143,11 @@ impl X11State {
 
         self.conn.sync().context("failed synchronising")?;
 
-        let tag = monitor.tag_mut(0); // TODO: tags
         let client = commands
             .spawn((
                 Client,
                 ClientName(window_name.clone()),
-                geom,
+                geometry,
                 ClientWindow(window),
                 ClientFrame(frame_window),
                 ClientState::default(),
@@ -162,77 +156,33 @@ impl X11State {
 
         tag.clients_mut().push(client);
 
-        info!(
-            "Managed window {window_name} on monitor {}, tag {}",
-            monitor_idx,
-            tag.idx()
-        );
-
-        debug!("{:#?}", self.monitors);
+        info!("Managed window {window_name} on tag {}", tag.idx());
 
         Ok(client)
     }
 
-    pub fn find_tag_mut(&mut self, client: Entity) -> Option<&mut Tag> {
-        for monitor in &mut self.monitors {
-            for tag in monitor.tags() {
-                if !tag.clients().contains(&client) {
-                    continue;
-                }
-
-                return Some(monitor.tag_mut((tag.idx() - 1) as usize));
-            }
-        }
-
-        None
-    }
-
-    pub fn find_monitor(&self, client: Entity) -> Option<&Monitor> {
-        for monitor in &self.monitors {
-            for tag in monitor.tags() {
-                if tag.clients().contains(&client) {
-                    return Some(monitor);
-                }
-            }
-        }
-
-        None
-    }
-
-    pub fn find_monitor_mut(&mut self, client: Entity) -> Option<&mut Monitor> {
-        for monitor in &mut self.monitors {
-            for tag in monitor.tags() {
-                if tag.clients().contains(&client) {
-                    return Some(monitor);
-                }
-            }
-        }
-
-        None
-    }
-
     pub fn unmanage(
         &mut self,
+        client: Entity,
         window: Window,
         geometry: Geometry,
         frame: Window,
-        monitor: MonitorId,
-        mut commands: Commands,
+        root_window: Window,
+        tag: &mut Tag,
     ) -> Result<()> {
-        let monitor = self.find_monitor(client).unwrap().idx();
-        let tag = self
-            .find_tag_mut(client)
-            .context("client is not on a tag")?;
         tag.clients_mut().retain(|c| &client != c);
-
-        let root = self.conn.setup().roots[monitor as usize].root;
 
         self.conn
             .change_save_set(SetMode::DELETE, window)
             .context("failed deleting window")?;
 
         self.conn
-            .reparent_window(window, root, geometry.x() as i16, geometry.y() as i16)
+            .reparent_window(
+                window,
+                root_window,
+                geometry.x() as i16,
+                geometry.y() as i16,
+            )
             .context("failed reparenting window to root")?;
 
         trace!("destroying frame window: {}", frame);

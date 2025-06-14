@@ -4,4 +4,3 @@ use crate::prelude::*;
 pub type Window = u32;
 
 wrapper!(SelectedWindow(Window));
-

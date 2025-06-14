@@ -1,10 +1,15 @@
+use std::sync::Arc;
+
 use crate::prelude::*;
 use x11rb::{
-    connection::Connection, errors::ReplyError, protocol::{
+    connection::Connection,
+    errors::ReplyError,
+    protocol::{
+        ErrorKind,
         xproto::{
             ChangeWindowAttributesAux, ConnectionExt, CreateGCAux, EventMask, MapState, Screen,
-        }, ErrorKind
-    }
+        },
+    },
 };
 
 wrapper!(AvailableScreens(Vec<Screen>));
@@ -12,12 +17,20 @@ wrapper!(ScreenNumber(usize));
 
 pub fn connect(mut commands: Commands) {
     let (conn, screen_num) = catching!("failed connecting to x11", x11rb::connect(None));
-    commands.insert_resource(X11Connection(conn));
+    let screens = (&conn).setup().roots.clone();
+    commands.insert_resource(AvailableScreens(screens.clone()));
+    commands.insert_resource(MainRootWindow(screens[screen_num].root));
+    commands.insert_resource(X11Connection(Arc::new(conn)));
     commands.insert_resource(ScreenNumber(screen_num as usize));
+    commands.insert_resource(Dragging(false));
 }
 
-pub fn become_wm(conn: Res<X11Connection>, screens: Res<AvailableScreens>, screen_num: Res<ScreenNumber>) {
-    let screen = screens[**screen_num];
+pub fn become_wm(
+    conn: Res<X11Connection>,
+    screens: Res<AvailableScreens>,
+    screen_num: Res<ScreenNumber>,
+) {
+    let screen = screens[**screen_num].clone();
     let change = ChangeWindowAttributesAux::default()
         .event_mask(EventMask::SUBSTRUCTURE_REDIRECT | EventMask::SUBSTRUCTURE_NOTIFY);
     let res = conn
@@ -31,7 +44,11 @@ pub fn become_wm(conn: Res<X11Connection>, screens: Res<AvailableScreens>, scree
     }
 }
 
-pub fn load_monitors(screens: Res<AvailableScreens>, config: Res<MainConfig>, mut commands: Commands) {
+pub fn load_monitors(
+    screens: Res<AvailableScreens>,
+    config: Res<MainConfig>,
+    mut commands: Commands,
+) {
     let tags_cfg = config.tags().clone();
     let tags = tags_cfg
         .enabled_tags()
@@ -56,13 +73,24 @@ pub fn load_monitors(screens: Res<AvailableScreens>, config: Res<MainConfig>, mu
             screen.height_in_pixels as u32,
         );
 
-        commands.spawn((Monitor, MonitorId(idx as u8), dimensions, SelectedTagset(Tagset::default()), Tagset::default(), Tags(tags)));
+        commands.spawn((
+            Monitor,
+            MonitorId(idx as u8),
+            dimensions,
+            SelectedTagset(Tagset::default()),
+            Tagset::default(),
+            Tags(tags.clone()),
+        ));
 
         prev_screen = Some(screen);
     }
 }
 
-pub fn init(conn: Res<X11Connection>, screens: Res<AvailableScreens>, mut commands: Commands) -> Result<()> {
+pub fn init(
+    conn: ResMut<X11Connection>,
+    mut commands: Commands,
+    screens: Res<AvailableScreens>,
+) -> Result<()> {
     let root_gc = conn.generate_id().context("failed generating root gc id")?;
 
     let screen = screens[0].clone();
@@ -91,18 +119,20 @@ pub fn init(conn: Res<X11Connection>, screens: Res<AvailableScreens>, mut comman
         .atom;
     commands.insert_resource(NetWMDeleteWindow(wm_delete_window));
 
-    let mut state = X11State {
-        conn: **conn,
-        dragging: None,
-    };
-    
+    let state = X11State { conn: X11Connection(conn.clone()) };
+
     commands.insert_resource(state);
 
     Ok(())
 }
 
-pub fn scan_existing_windows(mut state: ResMut<X11State>, screens: Res<AvailableScreens>, mut commands: Commands) {
-    for screen in screens {
+pub fn scan_existing_windows(
+    mut state: ResMut<X11State>,
+    mut monitors: Query<&mut Tags, With<Monitor>>,
+    mut commands: Commands,
+    screens: Res<AvailableScreens>,
+) -> Result<()> {
+    for screen in screens.clone() {
         let tree = state
             .conn
             .query_tree(screen.root)
@@ -125,16 +155,22 @@ pub fn scan_existing_windows(mut state: ResMut<X11State>, screens: Res<Available
             windows.push((win, attr, geom));
         }
 
-        for (win, attr, geom) in windows {
+        for (win, attr, geometry) in windows {
             if !attr.override_redirect && attr.map_state != MapState::UNMAPPED {
-                let geom = Geometry::new(
-                    geom.x as i32,
-                    geom.y as i32,
-                    geom.width as u32,
-                    geom.height as u32,
+                let geometry = Geometry::new(
+                    geometry.x as i32,
+                    geometry.y as i32,
+                    geometry.width as u32,
+                    geometry.height as u32,
                 );
-                state.manage(win, geom, &mut commands)?;
+
+                for mut tags in &mut monitors {
+                    let mut tag = tags.get_mut(0).unwrap();
+                    state.manage(win, geometry, screen.root, &mut tag, &mut commands)?;
+                }
             }
         }
     }
+    
+    Ok(())
 }

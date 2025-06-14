@@ -36,4 +36,3 @@ impl Geometry {
         x_overlap * y_overlap
     }
 }
-

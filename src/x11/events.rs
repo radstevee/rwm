@@ -58,9 +58,16 @@ pub fn poll_events(mut events: EventWriter<X11Event>, state: Res<X11State>) {
     }
 }
 
-pub fn handle_map_request(mut events: EventReader<X11Event>, mut state: ResMut<X11State>, mut commands: Commands) {
+pub fn handle_map_request(
+    mut events: EventReader<X11Event>,
+    mut state: ResMut<X11State>,
+    mut monitors: Query<&mut Tags, With<Monitor>>,
+    mut commands: Commands,
+    main_root: Res<MainRootWindow>,
+) {
     for event in events.read() {
         if let X11Event::MapRequest(event) = event {
+            dbg!(event);
             let geom = &state
                 .conn
                 .get_geometry(event.window)
@@ -68,79 +75,114 @@ pub fn handle_map_request(mut events: EventReader<X11Event>, mut state: ResMut<X
                 .reply()
                 .unwrap();
 
-            if let Err(e) = state.manage(
-                event.window,
-                Geometry::new(
-                    geom.x as i32,
-                    geom.y as i32,
-                    geom.width as u32,
-                    geom.height as u32,
-                ),
-                &mut commands,
-            ) {
-                error!(
-                    "failed managing window {}: {e} - this window will not be managed by rwm and may cause undefined behaviour",
-                    event.window
-                );
+            for mut tags in &mut monitors {
+                let mut tag = tags.get_mut(0).unwrap(); // TODO: tagging
+                if let Err(e) = state.manage(
+                    event.window,
+                    Geometry::new(
+                        geom.x as i32,
+                        geom.y as i32,
+                        geom.width as u32,
+                        geom.height as u32,
+                    ),
+                    **main_root,
+                    &mut tag,
+                    &mut commands,
+                ) {
+                    error!(
+                        "failed managing window {}: {e} - this window will not be managed by rwm and may cause undefined behaviour",
+                        event.window
+                    );
+                }
             }
         }
     }
 }
 
 // TODO: fix the fucking errors, it still works though (?????????????? repeat like fifty more times)
-pub fn handle_unmap_notify(mut events: EventReader<X11Event>, mut state: ResMut<X11State>) {
+pub fn handle_unmap_notify(
+    mut events: EventReader<X11Event>,
+    mut state: ResMut<X11State>,
+    mut monitors: Query<&mut Tags, With<Monitor>>,
+    query: Query<(Entity, &ClientWindow, &ClientFrame, &Geometry), With<Client>>,
+    root_window: Res<MainRootWindow>,
+) {
     for event in events.read() {
         if let X11Event::UnmapNotify(event) = event {
-            let Some(client) = state.find_client_owned(event.window) else {
-                trace!("tried unmapping nonexistant window: {}", event.window);
-                return;
-            };
-            if let Err(e) = state.unmanage(client) {
-                error!("failed unmanaging window {}: {e:?} - this may cause undefined behaviour", event.window);
+            for (client, window, frame, geometry) in query {
+                if **window != event.window {
+                    continue;
+                }
+                dbg!(event);
+
+                for mut tags in &mut monitors {
+                    let mut tag = tags.get_mut(0).unwrap();
+                    if let Err(e) = state.unmanage(
+                        client,
+                        **window,
+                        *geometry,
+                        **frame,
+                        **root_window,
+                        &mut tag,
+                    ) {
+                        error!("failed unmanaging window {}: {e:?} - this may result in undefined behaviour", **window);
+                    };
+                }
             }
         }
     }
 }
 
-pub fn handle_enter_notify(mut events: EventReader<X11Event>, state: Res<X11State>) {
+pub fn handle_enter_notify(
+    mut events: EventReader<X11Event>,
+    query: Query<(&ClientWindow, &ClientFrame), With<Client>>,
+    state: Res<X11State>,
+    main_root: Res<MainRootWindow>,
+) {
     for event in events.read() {
         if let X11Event::EnterNotify(event) = event {
-            if event.mode != NotifyMode::NORMAL && event.event == state.root_window {
+            if event.mode != NotifyMode::NORMAL && event.event == **main_root {
                 return;
             }
+            
+            debug!("enter notify");
 
-            let Some(client) = state.find_client(event.event) else {
-                trace!("tried entering nonexistant window: {}", event.event);
-                return;
-            };
+            for (window, frame) in query {
+                if event.event != **window {
+                    continue;
+                }
 
-            if let Err(e) =
-                state
-                    .conn
-                    .set_input_focus(InputFocus::PARENT, client.window(), CURRENT_TIME)
-            {
-                warn!(
-                    "failed setting input focus to window {}: {e:?} - you may not be able to use your keyboard in this window",
-                    event.event
-                );
+                if let Err(e) =
+                    state
+                        .conn
+                        .set_input_focus(InputFocus::PARENT, **window, CURRENT_TIME)
+                {
+                    warn!(
+                        "failed setting input focus to window {}: {e:?} - you may not be able to use your keyboard in this window",
+                        event.event
+                    );
+                }
+
+                if let Err(e) = state.conn.configure_window(
+                    **frame,
+                    &ConfigureWindowAux::new().stack_mode(StackMode::ABOVE),
+                ) {
+                    warn!(
+                        "failed setting proper stacking mode for frame window {}: {e:?} - this may cause visual glitches",
+                        event.event
+                    );
+                }
+
+                info!("entered window {}", event.event);
             }
-
-            if let Err(e) = state.conn.configure_window(
-                client.frame(),
-                &ConfigureWindowAux::new().stack_mode(StackMode::ABOVE),
-            ) {
-                warn!(
-                    "failed setting proper stacking mode for frame window {}: {e:?} - this may cause visual glitches",
-                    event.event
-                );
-            }
-
-            info!("entered window {}", event.event);
         }
     }
 }
 
-pub fn handle_button_press(mut events: EventReader<X11Event>, mut state: ResMut<X11State>) {
+pub fn handle_button_press(
+    mut events: EventReader<X11Event>,
+    mut dragging: ResMut<Dragging>,
+) {
     for event in events.read() {
         if let X11Event::ButtonPress(event) = event {
             if event.detail != 1 || u16::from(event.state) != u16::from(mod_mask()) {
@@ -148,52 +190,64 @@ pub fn handle_button_press(mut events: EventReader<X11Event>, mut state: ResMut<
                 return;
             }
 
-            if state.find_client(event.event).is_none() {
-                trace!("button press in nonexistant window: {}", event.event);
-                return;
-            };
+            **dragging = true;
+            debug!("started dragging");
 
-            if state.dragging.is_none() {
-                let (x, y) = (-event.event_x, -event.event_y);
-                state.dragging = Some((event.event, (x as i32, y as i32)));
-            }
+            // if state.find_client(event.event).is_none() {
+            //     trace!("button press in nonexistant window: {}", event.event);
+            //     return;
+            // };
+
+            // if state.dragging.is_none() {
+            //     let (x, y) = (-event.event_x, -event.event_y);
+            //     state.dragging = Some((event.event, (x as i32, y as i32)));
+            // }
         }
     }
 }
 
-pub fn handle_button_release(mut events: EventReader<X11Event>, mut state: ResMut<X11State>) {
+pub fn handle_button_release(
+    mut events: EventReader<X11Event>,
+    mut dragging: ResMut<Dragging>,
+) {
     for event in events.read() {
         if let X11Event::ButtonRelease(event) = event {
             if event.detail != 1 {
-                state.dragging = None;
+                **dragging = false;
+                debug!("stopped dragging");
             }
         }
     }
 }
 
-pub fn handle_motion_notify(mut events: EventReader<X11Event>, mut state: ResMut<X11State>) {
+pub fn handle_motion_notify(
+    mut events: EventReader<X11Event>,
+    state: ResMut<X11State>,
+    dragging: ResMut<Dragging>,
+    mut query: Query<(&mut Geometry, &ClientWindow), With<Client>>,
+) {
     for event in events.read() {
         if let X11Event::MotionNotify(event) = event {
-            let Some((window, (x, y))) = state.dragging else {
-                return;
-            };
-
-            let (x, y) = (x + event.root_x as i32, y + event.root_y as i32);
-
-            if let Err(e) = state
-                .conn
-                .configure_window(window, &ConfigureWindowAux::new().x(x).y(y))
-            {
-                error!("failed moving window {window}: {e:?}");
-                return;
+            if !**dragging {
+                continue;
             }
 
-            let Some(client) = state.find_client_mut(window) else {
-                error!("dragging nonexistant window: {}", window);
-                return;
-            };
+            for (geometry, window) in &mut query {
+                if event.event != **window {
+                    continue;
+                }
 
-            client.move_to(client.x() + x, client.y() + y);
+                if let Err(e) = state.conn.configure_window(
+                    **window,
+                    &ConfigureWindowAux::new().x(geometry.x()).y(geometry.y()),
+                ) {
+                    error!("failed moving window {}: {e:?}", **window);
+                    return;
+                }
+
+                geometry.set_x(geometry.x() + event.event_x as i32);
+                geometry.set_y(geometry.y() + event.event_y as i32);
+            }
         }
     }
 }
@@ -201,8 +255,7 @@ pub fn handle_motion_notify(mut events: EventReader<X11Event>, mut state: ResMut
 pub fn handle_error(mut events: EventReader<X11Event>) {
     for event in events.read() {
         if let X11Event::Error(err) = event {
-            error!("x11 error: {err:#?}");
+            // error!("x11 error: {err:#?}");
         }
     }
 }
-

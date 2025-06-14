@@ -6,6 +6,7 @@ pub mod config;
 pub mod cursor;
 pub mod geometry;
 pub mod layout;
+pub mod mgmt;
 pub mod monitor;
 pub mod tag;
 pub mod tagset;
@@ -13,7 +14,6 @@ pub mod tiling;
 pub mod update;
 pub mod util;
 pub mod window;
-pub mod mgmt;
 
 pub mod prelude;
 

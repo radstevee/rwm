@@ -83,7 +83,7 @@ impl Default for KeyboardConfig {
 }
 
 impl KeyboardConfig {
-    pub fn validate_modifier(modifier: &str) -> Result<()> {
+    pub fn validate_modifier(modifier: &str) -> anyhow::Result<()> {
         if !matches!(
             modifier,
             "super" | "alt" | "ctrl" | "meta" | "windows" | "win"
@@ -95,7 +95,7 @@ impl KeyboardConfig {
     }
 
     /// Validates this section.
-    pub fn validate(&self) -> Result<()> {
+    pub fn validate(&self) -> anyhow::Result<()> {
         Self::validate_modifier(&self.mod_key.clone())
     }
 }
