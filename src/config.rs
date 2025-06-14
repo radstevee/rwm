@@ -209,7 +209,7 @@ impl Default for TagsConfig {
 }
 
 impl TagsConfig {
-    fn validate(&self) -> Result<()> {
+    fn validate(&self) -> anyhow::Result<()> {
         if self.enabled_tags.len() > MAX_TAGS {
             bail!("enabled_tags cannot be larger than {MAX_TAGS}")
         }
@@ -340,7 +340,7 @@ pub struct BorderConfig {
 
 impl BorderConfig {
     /// Validates this configuration section.
-    pub fn validate(&self) -> Result<()> {
+    pub fn validate(&self) -> anyhow::Result<()> {
         if !self.enabled {
             return Ok(());
         }

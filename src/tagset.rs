@@ -4,7 +4,7 @@ use crate::prelude::*;
 pub const MAX_TAGS: usize = 10;
 
 /// Represents a set of tags that can be toggled between their indices and zeroes.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Component)]
 pub struct Tagset([u8; MAX_TAGS]);
 
 impl Default for Tagset {

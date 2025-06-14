@@ -20,10 +20,13 @@ fn main() {
 
             ..default()
         }))
-        .add_systems(Startup, (init_platform, <CurrentPlatform as Platform>::init).chain())
+        .add_plugins(PLATFORM)
         .init_resource::<Cli>()
         .init_resource::<MainConfig>()
-        .init_resource::<<CurrentPlatform as Platform>::State>()
-        .add_plugins(PLATFORM)
+        .add_systems(
+            Startup,
+            (init_platform, <CurrentPlatform as Platform>::init).chain(),
+        )
+        .add_systems(Update, update_client_geometry)
         .run();
 }

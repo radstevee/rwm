@@ -13,7 +13,7 @@ pub struct Tag {
     label: String,
 
     /// All clients in this tag.
-    clients: Vec<Client>,
+    clients: Vec<Entity>,
 
     /// The current layout of the tag.
     layout: Layout,
@@ -39,7 +39,7 @@ impl Eq for Tag {}
 
 impl Tag {
     /// A mutable reference to the clients of this tag.
-    pub fn clients_mut(&mut self) -> &mut Vec<Client> {
+    pub fn clients_mut(&mut self) -> &mut Vec<Entity> {
         &mut self.clients
     }
 

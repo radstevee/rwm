@@ -1,4 +1,5 @@
 pub mod bar;
+pub mod cli;
 pub mod client;
 pub mod color;
 pub mod config;
@@ -8,9 +9,11 @@ pub mod layout;
 pub mod monitor;
 pub mod tag;
 pub mod tagset;
+pub mod tiling;
+pub mod update;
 pub mod util;
 pub mod window;
-pub mod cli;
+pub mod mgmt;
 
 pub mod prelude;
 

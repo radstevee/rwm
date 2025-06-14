@@ -1,17 +1,23 @@
 use crate::prelude::*;
 use x11rb::{
-    connection::Connection,
-    errors::ReplyError,
-    protocol::{
-        ErrorKind,
+    connection::Connection, errors::ReplyError, protocol::{
         xproto::{
             ChangeWindowAttributesAux, ConnectionExt, CreateGCAux, EventMask, MapState, Screen,
-        },
-    },
-    rust_connection::RustConnection,
+        }, ErrorKind
+    }
 };
 
-pub fn become_wm(conn: &RustConnection, screen: &Screen) {
+wrapper!(AvailableScreens(Vec<Screen>));
+wrapper!(ScreenNumber(usize));
+
+pub fn connect(mut commands: Commands) {
+    let (conn, screen_num) = catching!("failed connecting to x11", x11rb::connect(None));
+    commands.insert_resource(X11Connection(conn));
+    commands.insert_resource(ScreenNumber(screen_num as usize));
+}
+
+pub fn become_wm(conn: Res<X11Connection>, screens: Res<AvailableScreens>, screen_num: Res<ScreenNumber>) {
+    let screen = screens[**screen_num];
     let change = ChangeWindowAttributesAux::default()
         .event_mask(EventMask::SUBSTRUCTURE_REDIRECT | EventMask::SUBSTRUCTURE_NOTIFY);
     let res = conn
@@ -25,8 +31,8 @@ pub fn become_wm(conn: &RustConnection, screen: &Screen) {
     }
 }
 
-pub fn load_monitors(screens: Vec<Screen>) -> Vec<Monitor> {
-    let tags_cfg = config().tags().clone();
+pub fn load_monitors(screens: Res<AvailableScreens>, config: Res<MainConfig>, mut commands: Commands) {
+    let tags_cfg = config.tags().clone();
     let tags = tags_cfg
         .enabled_tags()
         .iter()
@@ -38,28 +44,25 @@ pub fn load_monitors(screens: Vec<Screen>) -> Vec<Monitor> {
         .collect::<Vec<Tag>>();
 
     let mut prev_screen = None;
-    let mut monitors = vec![];
 
     for (idx, screen) in screens.iter().enumerate() {
         let x = prev_screen.map_or(0, |s: &Screen| s.width_in_pixels);
         let y = prev_screen.map_or(0, |s: &Screen| s.height_in_pixels);
 
         let dimensions = Geometry::new(
-            x as u32,
-            y as u32,
+            x as i32,
+            y as i32,
             screen.width_in_pixels as u32,
             screen.height_in_pixels as u32,
         );
 
-        monitors.push(Monitor::new(idx as u8, tags.clone(), dimensions));
+        commands.spawn((Monitor, MonitorId(idx as u8), dimensions, SelectedTagset(Tagset::default()), Tagset::default(), Tags(tags)));
 
         prev_screen = Some(screen);
     }
-
-    monitors
 }
 
-pub fn init(world: &mut World, conn: RustConnection, screens: Vec<Screen>) -> Result<X11State> {
+pub fn init(conn: Res<X11Connection>, screens: Res<AvailableScreens>, mut commands: Commands) -> Result<()> {
     let root_gc = conn.generate_id().context("failed generating root gc id")?;
 
     let screen = screens[0].clone();
@@ -78,7 +81,7 @@ pub fn init(world: &mut World, conn: RustConnection, screens: Vec<Screen>) -> Re
         .reply()
         .context("failed receiving WM_PROTOCOLS reply")?
         .atom;
-    world.insert_resource(NetWMProtocols(wm_protocols));
+    commands.insert_resource(NetWMProtocols(wm_protocols));
 
     let wm_delete_window = conn
         .intern_atom(false, b"WM_DELETE_WINDOW")
@@ -86,21 +89,19 @@ pub fn init(world: &mut World, conn: RustConnection, screens: Vec<Screen>) -> Re
         .reply()
         .context("failed receiving WM_DELETE_WINDOW reply")?
         .atom;
-    world.insert_resource(NetWMDeleteWindow(wm_delete_window));
+    commands.insert_resource(NetWMDeleteWindow(wm_delete_window));
 
     let mut state = X11State {
-        conn,
-        monitors: load_monitors(screens.clone()),
-        root_window: screen.root,
+        conn: **conn,
         dragging: None,
     };
+    
+    commands.insert_resource(state);
 
-    scan_existing_windows(&mut state, screens)?;
-
-    Ok(state)
+    Ok(())
 }
 
-pub fn scan_existing_windows(state: &mut X11State, screens: Vec<Screen>) -> Result<()> {
+pub fn scan_existing_windows(mut state: ResMut<X11State>, screens: Res<AvailableScreens>, mut commands: Commands) {
     for screen in screens {
         let tree = state
             .conn
@@ -127,15 +128,13 @@ pub fn scan_existing_windows(state: &mut X11State, screens: Vec<Screen>) -> Resu
         for (win, attr, geom) in windows {
             if !attr.override_redirect && attr.map_state != MapState::UNMAPPED {
                 let geom = Geometry::new(
-                    geom.x as u32,
-                    geom.y as u32,
+                    geom.x as i32,
+                    geom.y as i32,
                     geom.width as u32,
                     geom.height as u32,
                 );
-                state.manage(win, geom)?;
+                state.manage(win, geom, &mut commands)?;
             }
         }
     }
-
-    Ok(())
 }
