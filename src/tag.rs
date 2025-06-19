@@ -1,9 +1,7 @@
 use crate::prelude::*;
 
 /// A tag is a workspace that contains any number of clients. By default, only one tag is focused, but any amount of tags can be selected.
-#[derive(Debug, Clone, Getters, Setters)]
-#[setters(prefix = "set_")]
-#[setters(generate = false)]
+#[derive(Debug, Clone, Getters)]
 #[constructor(named(new), fields(idx, label, layout))]
 pub struct Tag {
     /// The index of the tag.
@@ -19,7 +17,6 @@ pub struct Tag {
     layout: Layout,
 
     /// The percentage of the size that the master client is using.
-    #[setters(generate)]
     master_factor: f32,
 
     /// Gaps between windows.
@@ -51,9 +48,7 @@ impl Tag {
 }
 
 /// Gaps between windows.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Getters, Setters, Default)]
-#[setters(prefix = "set_")]
-#[setters(generate_delegates(ty = "Tag", field = "gaps", prefix = "set_gaps_"))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Getters, Default)]
 pub struct Gaps {
     /// Horizontal gap between windows.
     inner_horizontal: u32,
@@ -69,8 +64,7 @@ pub struct Gaps {
 }
 
 /// The state of a tag.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Getters, Setters, Default)]
-#[setters(prefix = "set_")]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Getters, Default)]
 pub struct TagState {
     /// Whether this tag is currently selected.
     selected: bool,

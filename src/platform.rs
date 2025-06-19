@@ -26,25 +26,53 @@ pub trait Platform: Plugin + Clone + Copy {
         tag: &mut Tag,
         commands: &mut Commands,
         state: &mut Self::State,
-    ) -> Result<Entity>;
+    ) -> Result<(Entity, ClientFrame)>;
 
     /// Unmanages a window.
     fn unmanage(
         client: Entity,
         window: Window,
         geometry: Geometry,
-        frame: Window,
+        frame: Option<Window>,
         root_window: Window,
         tag: &mut Tag,
+        commands: &mut Commands,
         state: &mut Self::State,
-    ) -> Result<()>;
+    );
 
-    /// Updates the position of the given [`client`].
-    fn update_client_geometry(
+    /// Updates the position of the given [`client`] and adds the border.
+    fn update_bordered_client_geometry(
         config: &MainConfig,
         geometry: Geometry,
         window: Window,
         frame: Window,
         state: &mut Self::State,
-    ) -> Result<()>;
+    );
+
+    /// Deletes the frame window of a client.
+    fn delete_frame(
+        geometry: Geometry,
+        window: Window,
+        frame: Window,
+        root_window: Window,
+        state: &mut Self::State,
+    );
+
+    /// Recreates the frame window of a client.
+    fn create_frame(
+        config: &MainConfig,
+        geometry: Geometry,
+        window: Window,
+        root_window: Window,
+        state: &mut Self::State,
+    ) -> Result<ClientFrame>;
+
+    /// Updates the position of the given [`client`] and adds the border.
+    fn update_client_geometry(geometry: Geometry, window: Window, state: &mut Self::State);
+
+    /// Ungrabs the mouse.
+    fn ungrab_mouse(state: &mut Self::State);
+
+    /// Focuses the given [`window`].
+    fn focus(window: Window, state: &mut Self::State);
 }

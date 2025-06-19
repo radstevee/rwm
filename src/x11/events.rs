@@ -1,5 +1,9 @@
+use std::cmp::Reverse;
+
 use x11rb::connection::Connection;
-use x11rb::protocol::xproto::{ConnectionExt as _, MapRequestEvent};
+use x11rb::protocol::xproto::{
+    ConnectionExt as _, KeyPressEvent, MapRequestEvent, QueryPointerReply,
+};
 use x11rb::wrapper::ConnectionExt as _;
 use x11rb::x11_utils::X11Error;
 use x11rb::{
@@ -23,18 +27,37 @@ pub enum X11Event {
     MotionNotify(MotionNotifyEvent),
     ButtonPress(ButtonPressEvent),
     ButtonRelease(ButtonReleaseEvent),
+    KeyPress(KeyPressEvent),
     Error(X11Error),
 }
 
-pub fn poll_events(mut events: EventWriter<X11Event>, state: Res<X11State>) {
-    if let Err(e) = state.conn.flush() {
-        error!("failed flushing: {e:?}");
-        return;
-    }
+pub fn poll_events(mut events: EventWriter<X11Event>, mut state: ResMut<X11State>) {
+    state.conn.flush().unwrap();
 
     loop {
         match state.conn.poll_for_event() {
             Ok(Some(event)) => {
+                let mut should_ignore = false;
+                if let Some(seqno) = event.wire_sequence_number() {
+                    // Check sequences_to_ignore and remove entries with old (=smaller) numbers.
+                    while let Some(&Reverse(to_ignore)) = state.ignored_sequences.peek() {
+                        // Sequence numbers can wrap around, so we cannot simply check for
+                        // "to_ignore <= seqno". This is equivalent to "to_ignore - seqno <= 0", which is what we
+                        // check instead. Since sequence numbers are unsigned, we need a trick: We decide
+                        // that values from [MAX/2, MAX] count as "<= 0" and the rest doesn't.
+                        if to_ignore.wrapping_sub(seqno) <= u16::MAX / 2 {
+                            // If the two sequence numbers are equal, this event should be ignored.
+                            should_ignore = to_ignore == seqno;
+                            break;
+                        }
+                        state.ignored_sequences.pop();
+                    }
+                }
+
+                if should_ignore {
+                    continue;
+                }
+
                 let x11_event = match event {
                     Event::MapRequest(ev) => Some(X11Event::MapRequest(ev)),
                     Event::UnmapNotify(ev) => Some(X11Event::UnmapNotify(ev)),
@@ -42,6 +65,7 @@ pub fn poll_events(mut events: EventWriter<X11Event>, state: Res<X11State>) {
                     Event::MotionNotify(ev) => Some(X11Event::MotionNotify(ev)),
                     Event::ButtonPress(ev) => Some(X11Event::ButtonPress(ev)),
                     Event::ButtonRelease(ev) => Some(X11Event::ButtonRelease(ev)),
+                    Event::KeyPress(ev) => Some(X11Event::KeyPress(ev)),
                     Event::Error(err) => Some(X11Event::Error(err)),
                     _ => {
                         // info!("ignored event: {event:#?}");
@@ -68,7 +92,6 @@ pub fn handle_map_request(
 ) {
     for event in events.read() {
         if let X11Event::MapRequest(event) = event {
-            dbg!(event);
             let geom = &state
                 .conn
                 .get_geometry(event.window)
@@ -103,35 +126,22 @@ pub fn handle_map_request(
 // TODO: fix the fucking errors, it still works though (?????????????? repeat like fifty more times)
 pub fn handle_unmap_notify(
     mut events: EventReader<X11Event>,
-    mut state: ResMut<X11State>,
-    mut monitors: Query<&mut Tags, With<Monitor>>,
-    query: Query<(Entity, &ClientWindow, &ClientFrame, &Geometry), With<Client>>,
-    root_window: Res<MainRootWindow>,
+    mut commands: Commands,
+    query: Query<(Entity, &ClientWindow, Option<&ClientFrame>), With<Client>>,
 ) {
     for event in events.read() {
         if let X11Event::UnmapNotify(event) = event {
-            for (client, window, frame, geometry) in query {
+            for (client, window, frame) in query {
+                if frame.is_some_and(|f| **f == event.event || **f == event.window) {
+                    continue;
+                }
+
                 if **window != event.window {
                     continue;
                 }
-                dbg!(event);
 
-                for mut tags in &mut monitors {
-                    let tag = tags.get_mut(0).unwrap();
-                    if let Err(e) = state.unmanage(
-                        client,
-                        **window,
-                        *geometry,
-                        **frame,
-                        **root_window,
-                        tag,
-                    ) {
-                        error!(
-                            "failed unmanaging window {}: {e:?} - this may result in undefined behaviour",
-                            **window
-                        );
-                    };
-                }
+                debug!("unmanaging: {} {:?}", **window, frame);
+                commands.entity(client).insert(Unmanaged);
             }
         }
     }
@@ -146,7 +156,7 @@ pub fn handle_enter_notify(
     for event in events.read() {
         if let X11Event::EnterNotify(event) = event {
             if event.mode != NotifyMode::NORMAL && event.event == **main_root {
-                return;
+                continue;
             }
 
             for (window, frame) in query {
@@ -154,26 +164,17 @@ pub fn handle_enter_notify(
                     continue;
                 }
 
-                if let Err(e) =
-                    state
-                        .conn
-                        .set_input_focus(InputFocus::PARENT, **window, CURRENT_TIME)
-                {
-                    warn!(
-                        "failed setting input focus to window {}: {e:?} - you may not be able to use your keyboard in this window",
-                        event.event
-                    );
-                }
-
-                if let Err(e) = state.conn.configure_window(
-                    **frame,
-                    &ConfigureWindowAux::new().stack_mode(StackMode::ABOVE),
-                ) {
-                    warn!(
-                        "failed setting proper stacking mode for frame window {}: {e:?} - this may cause visual glitches",
-                        event.event
-                    );
-                }
+                state
+                    .conn
+                    .set_input_focus(InputFocus::PARENT, **window, CURRENT_TIME)
+                    .unwrap();
+                state
+                    .conn
+                    .configure_window(
+                        **frame,
+                        &ConfigureWindowAux::new().stack_mode(StackMode::ABOVE),
+                    )
+                    .unwrap();
 
                 info!("entered window {}", event.event);
             }
@@ -184,32 +185,32 @@ pub fn handle_enter_notify(
 pub fn handle_button_press(
     mut events: EventReader<X11Event>,
     mut dragging: ResMut<Dragging>,
-    query: Query<(&ClientWindow, &ClientFrame), With<Client>>,
+    query: Query<(&ClientWindow, &ClientFrame, Has<Dragging>), With<Client>>,
 ) {
     for event in events.read() {
         if let X11Event::ButtonPress(event) = event {
             if event.detail != 1 || u16::from(event.state) != u16::from(mod_mask()) {
                 trace!("skipping attempted drag");
-                return;
+                continue;
             }
 
-            debug!("started dragging");
-
-            for (window, frame) in query {
+            for (window, frame, is_dragging) in query {
                 if event.child != **window
                     && event.child != **frame
                     && event.event != **window
                     && event.event != **frame
                 {
-                    trace!(
-                        "window {} (frame {}) is not event window {}/{}",
-                        **window, **frame, event.event, event.child,
-                    );
                     continue;
                 }
 
+                if is_dragging {
+                    trace!("cannot drag fullscreened window");
+                    continue;
+                }
+
+                debug!("started dragging");
                 let (x, y) = (-event.event_x, -event.event_y);
-                **dragging = Some((**frame, x, y));
+                *dragging = Dragging(Some((**frame, x, y)));
             }
         }
     }
@@ -218,37 +219,48 @@ pub fn handle_button_press(
 pub fn handle_button_release(
     mut events: EventReader<X11Event>,
     mut dragging: ResMut<Dragging>,
-    query: Query<(&ClientWindow, &ClientFrame), With<Client>>,
+    query: Query<(&ClientWindow, &ClientFrame, &Geometry), With<Client>>,
     conn: Res<X11Connection>,
+    root_window: Res<MainRootWindow>,
 ) {
     for event in events.read() {
         if let X11Event::ButtonRelease(event) = event {
-            dbg!(event);
             if event.detail != 1 {
                 debug!("skipping attempted drag");
-                return;
+                continue;
             }
 
-            **dragging = None;
+            if dragging.is_none() {
+                continue;
+            }
+
+            *dragging = Dragging(None);
             debug!("stopped dragging");
 
-            for (window, frame) in query {
+            let QueryPointerReply {
+                root_x: ptr_x,
+                root_y: ptr_y,
+                ..
+            } = conn.query_pointer(**root_window).unwrap().reply().unwrap();
+
+            for (window, frame, geometry) in query {
                 if event.child != **window
                     && event.child != **frame
                     && event.event != **window
                     && event.event != **frame
                 {
-                    trace!(
-                        "window {} (frame {}) is not event window {}/{}",
-                        **window, **frame, event.event, event.child,
-                    );
                     continue;
                 }
+
+                if !geometry.contains(ptr_x as i32, ptr_y as i32) {
+                    continue;
+                }
+
                 conn.ungrab_pointer(CURRENT_TIME).unwrap();
 
                 if let Err(e) = conn.set_input_focus(InputFocus::PARENT, **window, CURRENT_TIME) {
                     warn!(
-                        "failed setting input focus to window {}: {e:?} - you may not be able to use your keyboard in this window",
+                        "failed setting input focus to window {}: {e} - you may not be able to use your keyboard in this window",
                         event.event
                     );
                 }
@@ -279,19 +291,13 @@ pub fn handle_motion_notify(
                     && event.event != **window
                     && event.event != **frame
                 {
-                    trace!(
-                        "window {} (frame {}) is not event window {}/{}",
-                        **window, **frame, event.event, event.child,
-                    );
                     continue;
                 }
 
                 let (x, y) = (x + event.root_x, y + event.root_y);
                 let (x, y) = (x as i32, y as i32);
 
-                // I have zero fucking clue why this works but setters don't
-                geometry.x = x;
-                geometry.y = y;
+                *geometry = Geometry::new(x, y, geometry.width(), geometry.height());
 
                 let border_width = config.border().width() as i16;
 
@@ -302,9 +308,28 @@ pub fn handle_motion_notify(
                         .x(((geometry.x() as i16) - border_width) as i32)
                         .y(((geometry.y() as i16) - border_width) as i32),
                 ) {
-                    error!("failed moving window {} whilst dragging: {e:?}", **window);
+                    error!("failed moving window {} whilst dragging: {e}", **window);
                 };
                 conn.sync().unwrap();
+            }
+        }
+    }
+}
+
+pub fn handle_key_press(
+    mut events: EventReader<X11Event>,
+    mut keyboard_events: EventWriter<KeybindTriggered>,
+    query: Query<Entity, With<Client>>,
+    state: Res<X11State>,
+) {
+    for event in events.read() {
+        if let X11Event::KeyPress(event) = event {
+            let Some(action) = find_keybind_action_for(event.detail, event.state, &state) else {
+                continue;
+            };
+
+            for client in query {
+                keyboard_events.write(KeybindTriggered::new(action.clone(), client));
             }
         }
     }

@@ -1,13 +1,10 @@
-use std::sync::Arc;
+use std::{cmp::Reverse, collections::BinaryHeap, sync::Arc};
 
 use crate::prelude::*;
 use x11rb::{
     COPY_DEPTH_FROM_PARENT,
     connection::Connection,
-    protocol::xproto::{
-        AtomEnum, ButtonIndex, ConnectionExt, CreateWindowAux, EventMask, GrabMode, SetMode,
-        WindowClass,
-    },
+    protocol::xproto::{AtomEnum, ConnectionExt, CreateWindowAux, EventMask, SetMode, WindowClass},
     rust_connection::RustConnection,
     wrapper::ConnectionExt as _,
 };
@@ -25,6 +22,7 @@ wrapper!(Dragging(Option<(Window, i16, i16)>));
 #[derive(Resource)]
 pub struct X11State {
     conn: X11Connection,
+    ignored_sequences: BinaryHeap<Reverse<u16>>,
 }
 
 impl X11State {
@@ -53,7 +51,7 @@ impl X11State {
         root_window: Window,
         tag: &mut Tag,
         commands: &mut Commands,
-    ) -> Result<Entity> {
+    ) -> Result<(Entity, ClientFrame)> {
         info!("Managing window {window} (geom: {geometry:#?}");
 
         let window_name = self.window_name(window)?.to_string();
@@ -79,75 +77,40 @@ impl X11State {
             );
 
         let border_width = config.border().width() as i16;
-        self.conn
-            .create_window(
-                COPY_DEPTH_FROM_PARENT,
-                frame_window,
-                root_window,
-                (geometry.x() as i16) - border_width,
-                (geometry.y() as i16) - border_width,
-                (geometry.width() as u16) + 2 * border_width as u16,
-                (geometry.height() as u16) + 2 * border_width as u16,
-                0,
-                WindowClass::INPUT_OUTPUT,
-                0,
-                &win_aux,
-            )
-            .context("failed creating frame window")?;
+        self.conn.create_window(
+            COPY_DEPTH_FROM_PARENT,
+            frame_window,
+            root_window,
+            (geometry.x() as i16) - border_width,
+            (geometry.y() as i16) - border_width,
+            (geometry.width() as u16) + 2 * border_width as u16,
+            (geometry.height() as u16) + 2 * border_width as u16,
+            0,
+            WindowClass::INPUT_OUTPUT,
+            0,
+            &win_aux,
+        )?;
 
-        self.conn.grab_server().context("failed grabbing server")?;
-        self.conn
-            .change_save_set(SetMode::INSERT, window)
-            .context("failed inserting window")?;
-        self.conn
-            .reparent_window(
-                window,
-                frame_window,
-                // ??? why the fuck X11
-                (border_width as f32 * 1.5) as i16,
-                (border_width as f32 * 1.5) as i16,
-            )
-            .context("failed reparenting window")?;
-        self.conn
-            .map_window(window)
-            .context("failed mapping window")?;
-        self.conn
-            .map_window(frame_window)
-            .context("failed mapping frame window")?;
-        self.conn
-            .grab_key(
-                false,
-                root_window,
-                mod_mask(),
-                0, /* any key */
-                GrabMode::ASYNC,
-                GrabMode::ASYNC,
-            )
-            .context("failed grabbing keys")?;
-        self.conn
-            .grab_button(
-                false,
-                root_window,
-                EventMask::BUTTON_PRESS | EventMask::BUTTON_RELEASE | EventMask::BUTTON1_MOTION,
-                GrabMode::ASYNC,
-                GrabMode::ASYNC,
-                root_window,
-                0u32,
-                ButtonIndex::ANY,
-                mod_mask(),
-            )
-            .context("failed grabbing buttons")?;
-        self.conn
-            .ungrab_server()
-            .context("failed ungrabbing server")?;
-
-        self.conn.sync().context("failed synchronising")?;
+        self.conn.grab_server()?;
+        self.conn.change_save_set(SetMode::INSERT, window)?;
+        let cookie = self.conn.reparent_window(
+            window,
+            frame_window,
+            // ??? why the fuck X11
+            (border_width as f32 * 1.5) as i16,
+            (border_width as f32 * 1.5) as i16,
+        )?;
+        self.conn.map_window(window)?;
+        self.conn.map_window(frame_window)?;
+        self.conn.ungrab_server()?;
+        self.conn.sync()?;
 
         let client = commands
             .spawn((
                 Client,
                 ClientName(window_name.clone()),
                 geometry,
+                OriginalGeometry(geometry),
                 ClientWindow(window),
                 ClientFrame(frame_window),
                 ClientState::default(),
@@ -158,7 +121,10 @@ impl X11State {
 
         info!("Managed window {window_name} on tag {}", tag.idx());
 
-        Ok(client)
+        self.ignored_sequences
+            .push(Reverse(cookie.sequence_number() as u16));
+
+        Ok((client, ClientFrame(frame_window)))
     }
 
     pub fn unmanage(
@@ -166,15 +132,19 @@ impl X11State {
         client: Entity,
         window: Window,
         geometry: Geometry,
-        frame: Window,
+        frame: Option<Window>,
         root_window: Window,
+        commands: &mut Commands,
         tag: &mut Tag,
-    ) -> Result<()> {
+    ) {
+        trace!("unmanaging window {window}");
         tag.clients_mut().retain(|c| &client != c);
 
-        self.conn
-            .change_save_set(SetMode::DELETE, window)
-            .context("failed deleting window")?;
+        if let Ok(mut entity) = commands.get_entity(client) {
+            entity.despawn();
+        }
+
+        self.conn.change_save_set(SetMode::DELETE, window).unwrap();
 
         self.conn
             .reparent_window(
@@ -183,16 +153,21 @@ impl X11State {
                 geometry.x() as i16,
                 geometry.y() as i16,
             )
-            .context("failed reparenting window to root")?;
+            .unwrap();
 
-        trace!("destroying frame window: {}", frame);
-        self.conn
-            .destroy_window(frame)
-            .context("failed destroying window")?;
+        if let Some(frame) = frame
+            && self
+                .conn
+                .get_window_attributes(frame)
+                .unwrap()
+                .reply()
+                .is_ok()
+        {
+            trace!("deleting frame of {window}: {frame}");
+            CurrentPlatform::delete_frame(geometry, window, frame, root_window, self);
+        }
 
-        self.conn.sync().context("failed synchronising")?;
-
-        Ok(())
+        self.conn.sync().unwrap();
     }
 }
 

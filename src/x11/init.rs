@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{collections::BinaryHeap, sync::Arc};
 
 use crate::prelude::*;
 use x11rb::{
@@ -7,7 +7,8 @@ use x11rb::{
     protocol::{
         ErrorKind,
         xproto::{
-            ChangeWindowAttributesAux, ConnectionExt, CreateGCAux, EventMask, MapState, Screen,
+            ButtonIndex, ChangeWindowAttributesAux, ConnectionExt, CreateGCAux, EventMask,
+            GrabMode, MapState, Screen,
         },
     },
 };
@@ -91,7 +92,7 @@ pub fn init(
     mut commands: Commands,
     screens: Res<AvailableScreens>,
 ) -> Result<()> {
-    let root_gc = conn.generate_id().context("failed generating root gc id")?;
+    let root_gc = conn.generate_id().unwrap();
 
     let screen = screens[0].clone();
 
@@ -100,12 +101,11 @@ pub fn init(
         .background(screen.black_pixel)
         .foreground(screen.white_pixel);
 
-    conn.create_gc(root_gc, screen.root, &gc_aux)
-        .context("failed creating root gc")?;
+    conn.create_gc(root_gc, screen.root, &gc_aux).unwrap();
 
     let wm_protocols = conn
         .intern_atom(false, b"WM_PROTOCOLS")
-        .context("failed fetching WM_PROTOCOLS")?
+        .unwrap()
         .reply()
         .context("failed receiving WM_PROTOCOLS reply")?
         .atom;
@@ -113,7 +113,7 @@ pub fn init(
 
     let wm_delete_window = conn
         .intern_atom(false, b"WM_DELETE_WINDOW")
-        .context("failed fetching WM_DELETE_WINDOW")?
+        .unwrap()
         .reply()
         .context("failed receiving WM_DELETE_WINDOW reply")?
         .atom;
@@ -121,6 +121,7 @@ pub fn init(
 
     let state = X11State {
         conn: X11Connection(conn.clone()),
+        ignored_sequences: BinaryHeap::default()
     };
 
     commands.insert_resource(state);
@@ -167,12 +168,41 @@ pub fn scan_existing_windows(
                 );
 
                 for mut tags in &mut monitors {
-                    let tag = tags.get_mut(0).unwrap();
-                    state.manage(win, geometry, screen.root, tag, &mut commands)?;
+                    let mut tag = (tags).get_mut(0).unwrap();
+                    state.manage(win, geometry, screen.root, &mut tag, &mut commands)?;
                 }
             }
         }
     }
 
     Ok(())
+}
+
+pub fn grab(state: Res<X11State>, root_window: Res<MainRootWindow>) {
+    state
+        .conn
+        .grab_button(
+            false,
+            **root_window,
+            EventMask::BUTTON_PRESS | EventMask::BUTTON_RELEASE | EventMask::BUTTON1_MOTION,
+            GrabMode::ASYNC,
+            GrabMode::ASYNC,
+            **root_window,
+            0u32,
+            ButtonIndex::ANY,
+            mod_mask(),
+        )
+        .unwrap();
+
+    state
+        .conn
+        .grab_key(
+            false,
+            **root_window,
+            mod_mask(),
+            0, /* any key */
+            GrabMode::ASYNC,
+            GrabMode::ASYNC,
+        )
+        .unwrap();
 }

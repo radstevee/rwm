@@ -74,9 +74,8 @@ macro_rules! dev_only {
 #[macro_export]
 macro_rules! wrapper {
     ($name:ident($inner:ty)) => {
-        #[doc = concat!("A wrapper around [`", stringify!($inner), "`] that can be used as a component or resource.")]
-        #[derive(Resource)]
-        #[derive(Component)]
+        #[doc = concat!("A wrapper around [`", stringify!($inner), "`] that can be used as a component, resource or event.")]
+        #[derive(Resource, Event, Component, Debug)]
         pub struct $name(pub $inner);
 
         impl std::ops::Deref for $name {

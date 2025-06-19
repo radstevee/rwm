@@ -1,3 +1,5 @@
+#![feature(let_chains)]
+
 pub mod bar;
 pub mod cli;
 pub mod client;
@@ -5,6 +7,7 @@ pub mod color;
 pub mod config;
 pub mod cursor;
 pub mod geometry;
+pub mod keybind;
 pub mod layout;
 pub mod mgmt;
 pub mod monitor;

@@ -1,32 +1,29 @@
 use crate::prelude::*;
 
 #[derive(Component, Clone, Copy, Debug)]
-pub struct Disowned;
+pub struct Unmanaged;
 
 pub fn handle_unmanage(
     mut monitors: Query<&mut Tags, With<Monitor>>,
     mut state: ResMut<PlatformState>,
-    clients: Query<(Entity, &ClientWindow, &Geometry, &ClientFrame), With<Disowned>>,
+    mut commands: Commands,
+    clients: Query<(Entity, &ClientWindow, &Geometry, Option<&ClientFrame>), With<Unmanaged>>,
     root_window: Res<MainRootWindow>,
 ) {
     for (client, window, geometry, frame) in clients {
         for mut tags in &mut monitors {
             let tag = tags.get_mut(0).unwrap(); // TODO: tagging
 
-            if let Err(e) = CurrentPlatform::unmanage(
+            CurrentPlatform::unmanage(
                 client,
                 **window,
                 *geometry,
-                **frame,
+                frame.map(|f| **f),
                 **root_window,
                 tag,
+                &mut commands,
                 &mut state,
-            ) {
-                error!(
-                    "failed unmanaging window {}: {e:?} - this may lead to undefined behaviour",
-                    **window
-                );
-            }
+            );
         }
     }
 }

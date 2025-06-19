@@ -19,9 +19,19 @@ label_9 = "9"
 mod_key = "super"
 
 [[bindings]]
+key = "f"
+action = { type = "toggle_fullscreen" }
+
+[[bindings]]
 key = "h"
-exec = "hello"
+action = { type = "shell", value = "echo hello world" }
 
 [border]
 width = 5
 selected_color = 0x86aaec
+
+[gaps]
+outer_left = 8
+outer_right = 8
+outer_bottom = 8
+outer_top = 8

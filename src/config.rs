@@ -3,7 +3,6 @@ use std::{path::PathBuf, sync::OnceLock};
 use anyhow::anyhow;
 use figment::{
     Error, Figment,
-    error::Kind,
     providers::{Env, Format, Toml},
 };
 use serde::Deserialize;
@@ -28,6 +27,10 @@ pub struct MainConfig {
     /// Border configuration.
     #[serde(default)]
     border: BorderConfig,
+
+    /// Gap configuration.
+    #[serde(default)]
+    gaps: GapsConfig,
 }
 
 impl MainConfig {
@@ -37,7 +40,7 @@ impl MainConfig {
         self.keyboard.validate()?;
 
         for binding in self.bindings.clone() {
-            binding.validate(self.keyboard.mod_key.clone())?;
+            binding.validate()?;
         }
 
         self.border.validate()?;
@@ -104,42 +107,23 @@ impl KeyboardConfig {
 #[derive(Deserialize, Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Getters)]
 pub struct KeyBinding {
     /// The key.
-    key: String,
+    key: char,
 
     /// The modifier.
     #[serde(rename = "mod")]
     modifiers: Option<Vec<String>>,
 
-    /// A shell command to execute.
-    exec: Option<String>,
-
-    /// A tag to switch to.
-    switch_tag: Option<u32>,
-
-    /// A tag to move the selected window to.
-    move_to_tag: Option<u32>,
+    /// The action to execute.
+    action: KeybindAction,
 }
 
 impl KeyBinding {
     /// Validates this binding.
-    pub fn validate(&self, mod_key: String) -> Result<()> {
+    pub fn validate(&self) -> Result<()> {
         if let Some(modifiers) = self.modifiers.clone() {
             for modifier in modifiers {
                 KeyboardConfig::validate_modifier(&modifier)?;
             }
-        }
-
-        if self.exec.is_none() && self.switch_tag.is_none() && self.move_to_tag.is_none() {
-            let mod_key = self
-                .modifiers
-                .clone()
-                .map(|mods| mods.join(" + "))
-                .unwrap_or(mod_key);
-
-            warn!(
-                "key binding {mod_key} + {} has no actions configured",
-                self.key
-            )
         }
 
         Ok(())
@@ -357,6 +341,42 @@ impl BorderConfig {
     }
 }
 
+/// Configuration of window gaps.
+#[derive(Deserialize, Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Getters, Default)]
+pub struct GapsConfig {
+    /// Outer left borders.
+    #[serde(default)]
+    outer_left: u32,
+
+    /// Outer right borders.
+    #[serde(default)]
+    outer_right: u32,
+
+    /// Outer bottom borders.
+    #[serde(default)]
+    outer_bottom: u32,
+
+    /// Outer top borders.
+    #[serde(default)]
+    outer_top: u32,
+
+    /// Inner left borders.
+    #[serde(default)]
+    inner_left: u32,
+
+    /// Inner right borders.
+    #[serde(default)]
+    inner_right: u32,
+
+    /// Inner bottom borders.
+    #[serde(default)]
+    inner_bottom: u32,
+
+    /// Inner top borders.
+    #[serde(default)]
+    inner_top: u32,
+}
+
 static CONFIG: OnceLock<MainConfig> = OnceLock::new();
 
 /// Loads the configuration from the given configuration file, or `rwm.toml`.
@@ -380,32 +400,7 @@ fn load_error_friendly(error: Error) -> anyhow::Error {
         &error.path.join(".")
     };
 
-    match error.kind {
-        Kind::MissingField(field) => anyhow!("missing field at {path}: {field}"),
-        Kind::Message(msg) => anyhow!("error at {path}: {msg}"),
-        Kind::InvalidType(actual, expected) => {
-            anyhow!("invalid type at {path}: {actual}, {expected} was expected")
-        }
-        Kind::InvalidValue(actual, expected) => {
-            anyhow!("invald value at {path}: {actual}, {expected} was expected")
-        }
-        Kind::InvalidLength(len, expected) => {
-            anyhow!("invalid length at {path}: {len}, {expected} was expected")
-        }
-        Kind::UnknownVariant(actual, expected) => {
-            anyhow!("unknown variant at {path}: {actual}, one of {expected:?} was expected")
-        }
-        Kind::UnknownField(actual, expected) => {
-            anyhow!("unknown field at {path}: {actual}, one of {expected:?} was expected")
-        }
-        Kind::DuplicateField(field) => anyhow!("duplicated field at {path}: {field}"),
-        Kind::ISizeOutOfRange(value) => anyhow!("isize out of range at {path}: {value}"),
-        Kind::USizeOutOfRange(value) => anyhow!("usize out of range at {path}: {value}"),
-        Kind::Unsupported(actual) => anyhow!("unsupported type at {path}: {actual}"),
-        Kind::UnsupportedKey(actual, expected) => {
-            anyhow!("unsupported key at {path}: {actual}, {expected:?} was expected")
-        }
-    }
+    anyhow!("error at {path}: {error}")
 }
 
 /// Gets the loaded configuration file, or panic if it does not exist.

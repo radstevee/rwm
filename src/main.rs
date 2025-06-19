@@ -14,6 +14,14 @@ fn main() {
         .add_plugins(PLATFORM)
         .init_resource::<Cli>()
         .init_resource::<MainConfig>()
-        .add_systems(Update, handle_unmanage)
+        .add_event::<KeybindTriggered>()
+        .add_systems(
+            Startup,
+            (print_config, add_fullscreen_remove_handler).chain(),
+        )
+        .add_systems(
+            Update,
+            (handle_unmanage, handle_fullscreen, handle_fullscreen_add).chain(),
+        )
         .run();
 }

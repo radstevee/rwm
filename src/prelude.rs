@@ -6,12 +6,15 @@ pub use crate::color::*;
 pub use crate::config::*;
 pub use crate::cursor::*;
 pub use crate::geometry::*;
+pub use crate::keybind::*;
 pub use crate::layout::*;
 pub use crate::mgmt::*;
 pub use crate::monitor::*;
 pub use crate::platform::*;
 pub use crate::tag::*;
 pub use crate::tagset::*;
+pub use crate::tiling::fullscreen::*;
+pub use crate::tiling::*;
 pub use crate::util::*;
 pub use crate::window::*;
 
@@ -37,11 +40,10 @@ pub use crate::wayland_unimplemented;
 pub use crate::wrapper;
 
 // Libraries and utilities
-pub use anyhow::{Context, Error, bail};
+pub use anyhow::{Context, Error, anyhow, bail};
 pub use bevy::prelude::*;
 pub use derive_constructors::*;
 pub use derive_getters::*;
-pub use derive_setters::*;
 pub use std::result::Result::*;
 
 pub use crate::platform::PLATFORM;

@@ -1,15 +1,16 @@
 use crate::prelude::*;
 
+wrapper!(OriginalGeometry(Geometry));
+
 /// Generic struct for geometry.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Getters, Setters, Component)]
-#[setters(prefix = "set_")]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Getters, Component)]
 #[constructor(named(new), fields(x, y, width, height))]
 pub struct Geometry {
     /// The x position.
-    pub x: i32,
+    x: i32,
 
     /// The y position.
-    pub y: i32,
+    y: i32,
 
     /// The width.
     width: u32,
@@ -34,5 +35,10 @@ impl Geometry {
         let x_overlap = self.right().min(other.right()) - self.x.max(other.x);
         let y_overlap = self.bottom().min(other.bottom()) - self.y.max(other.y);
         x_overlap * y_overlap
+    }
+
+    /// Whether the given [`x`] and [`y`] points are contained in this geometry object.
+    pub fn contains(&self, x: i32, y: i32) -> bool {
+        x >= self.x && x < self.right() && y >= self.y && y < self.bottom()
     }
 }
