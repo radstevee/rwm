@@ -74,7 +74,11 @@ pub fn find_keybind_action_for(
             })
             .collect::<Vec<KeyButMask>>();
 
-        if mods == pressed_mods && keybind.key() == keysym {
+        if mods != pressed_mods {
+            continue;
+        }
+        
+        if keybind.key() == &keysym {
             return Some(keybind.action().clone());
         }
     }
@@ -82,13 +86,13 @@ pub fn find_keybind_action_for(
     None
 }
 
-fn find_keysym(code: Keycode, state: &X11State) -> Result<char> {
+fn find_keysym(code: Keycode, state: &X11State) -> Result<String> {
     let cookie = state.conn.get_keyboard_mapping(code, 1).unwrap();
     let reply = cookie.reply()?;
 
-    if let Some(&keysym) = reply.keysyms.get(0) {
-        if let Some(char) = keysym_to_char(keysym) {
-            Ok(char)
+    if let Some(&keysym) = reply.keysyms.first() {
+        if let Some(keysym) = decode_keysym(keysym, code) {
+            Ok(keysym)
         } else {
             Err(anyhow!("unknown keysym: {keysym}").into())
         }
@@ -97,9 +101,13 @@ fn find_keysym(code: Keycode, state: &X11State) -> Result<char> {
     }
 }
 
-fn keysym_to_char(keysym: u32) -> Option<char> {
-    if keysym >= 0x20 && keysym <= 0x7E {
-        Some(keysym as u8 as char)
+fn decode_keysym(keysym: u32, keycode: Keycode) -> Option<String> {
+    if keycode == 36 {
+        return Some("return".to_string())
+    }
+ 
+    if (0x20..=0x7E).contains(&keysym) {
+        Some((keysym as u8 as char).to_string())
     } else {
         None
     }

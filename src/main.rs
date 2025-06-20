@@ -21,7 +21,7 @@ fn main() {
         )
         .add_systems(
             Update,
-            (handle_unmanage, handle_fullscreen, handle_fullscreen_add).chain(),
+            (handle_unmanage, handle_fullscreen, handle_fullscreen_add, handle_shell).chain(),
         )
         .run();
 }

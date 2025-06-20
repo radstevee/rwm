@@ -1,4 +1,7 @@
 #![feature(let_chains)]
+// bevy
+#![allow(clippy::too_many_arguments)]
+#![allow(clippy::type_complexity)]
 
 pub mod bar;
 pub mod cli;

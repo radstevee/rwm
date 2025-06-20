@@ -1,3 +1,5 @@
+use std::process::Command;
+
 use serde::Deserialize;
 
 use crate::prelude::*;
@@ -18,5 +20,17 @@ pub enum KeybindAction {
 #[constructor(named(new), fields(action, client))]
 pub struct KeybindTriggered {
     action: KeybindAction,
-    client: Entity,
+    client: Option<Entity>,
+}
+
+pub fn handle_shell(mut events: EventReader<KeybindTriggered>) {
+    for event in events.read() {
+        let KeybindAction::Shell(cmd) = event.action() else {
+            continue;
+        };
+
+        if let Err(e) = Command::new("sh").arg("-c").arg(cmd.clone()).spawn() {
+            error!("failed running command {cmd}: {e}");
+        }
+    }
 }

@@ -107,7 +107,7 @@ impl KeyboardConfig {
 #[derive(Deserialize, Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Getters)]
 pub struct KeyBinding {
     /// The key.
-    key: char,
+    key: String,
 
     /// The modifier.
     #[serde(rename = "mod")]

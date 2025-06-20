@@ -168,8 +168,8 @@ pub fn scan_existing_windows(
                 );
 
                 for mut tags in &mut monitors {
-                    let mut tag = (tags).get_mut(0).unwrap();
-                    state.manage(win, geometry, screen.root, &mut tag, &mut commands)?;
+                    let tag = (tags).get_mut(0).unwrap();
+                    state.manage(win, geometry, screen.root, tag, &mut commands)?;
                 }
             }
         }

@@ -203,6 +203,7 @@ impl Plugin for X11 {
                     handle_button_press,
                     handle_button_release,
                     handle_key_press,
+                    handle_map_notify,
                     handle_error,
                     flush,
                 )

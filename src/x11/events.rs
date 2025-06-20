@@ -2,7 +2,7 @@ use std::cmp::Reverse;
 
 use x11rb::connection::Connection;
 use x11rb::protocol::xproto::{
-    ConnectionExt as _, KeyPressEvent, MapRequestEvent, QueryPointerReply,
+    ConnectionExt as _, KeyPressEvent, MapNotifyEvent, MapRequestEvent, QueryPointerReply,
 };
 use x11rb::wrapper::ConnectionExt as _;
 use x11rb::x11_utils::X11Error;
@@ -28,6 +28,7 @@ pub enum X11Event {
     ButtonPress(ButtonPressEvent),
     ButtonRelease(ButtonReleaseEvent),
     KeyPress(KeyPressEvent),
+    MapNotify(MapNotifyEvent),
     Error(X11Error),
 }
 
@@ -66,6 +67,7 @@ pub fn poll_events(mut events: EventWriter<X11Event>, mut state: ResMut<X11State
                     Event::ButtonPress(ev) => Some(X11Event::ButtonPress(ev)),
                     Event::ButtonRelease(ev) => Some(X11Event::ButtonRelease(ev)),
                     Event::KeyPress(ev) => Some(X11Event::KeyPress(ev)),
+                    Event::MapNotify(ev) => Some(X11Event::MapNotify(ev)),
                     Event::Error(err) => Some(X11Event::Error(err)),
                     _ => {
                         // info!("ignored event: {event:#?}");
@@ -127,21 +129,37 @@ pub fn handle_map_request(
 pub fn handle_unmap_notify(
     mut events: EventReader<X11Event>,
     mut commands: Commands,
-    query: Query<(Entity, &ClientWindow, Option<&ClientFrame>), With<Client>>,
+    query: Query<
+        (
+            Entity,
+            &ClientWindow,
+            Option<&ClientFrame>,
+            Has<TransitioningFullscreenStates>,
+        ),
+        With<Client>,
+    >,
 ) {
     for event in events.read() {
         if let X11Event::UnmapNotify(event) = event {
-            for (client, window, frame) in query {
-                if frame.is_some_and(|f| **f == event.event || **f == event.window) {
+            for (client, window, frame, transitioning) in query {
+                if frame.is_some_and(|f| **f == event.event || **f == event.window) && transitioning
+                {
                     continue;
                 }
 
                 if **window != event.window {
+                    dbg!(**window, event.window);
                     continue;
                 }
 
                 debug!("unmanaging: {} {:?}", **window, frame);
                 commands.entity(client).insert(Unmanaged);
+
+                if transitioning {
+                    commands
+                        .entity(client)
+                        .remove::<TransitioningFullscreenStates>();
+                }
             }
         }
     }
@@ -328,8 +346,29 @@ pub fn handle_key_press(
                 continue;
             };
 
+            if query.is_empty() {
+                keyboard_events.write(KeybindTriggered::new(action.clone(), None));
+            }
             for client in query {
-                keyboard_events.write(KeybindTriggered::new(action.clone(), client));
+                // TODO: focusing
+                keyboard_events.write(KeybindTriggered::new(action.clone(), Some(client)));
+            }
+        }
+    }
+}
+
+pub fn handle_map_notify(
+    mut events: EventReader<X11Event>,
+    mut commands: Commands,
+    query: Query<(Entity, &ClientFrame, Has<TransitioningFullscreenStates>)>,
+) {
+    for event in events.read() {
+        if let X11Event::MapNotify(event) = event {
+            trace!("map notify: {} {}", event.event, event.window);
+            for (client, frame, transitioning) in query {
+                if **frame == event.event && transitioning {
+                    commands.entity(client).remove::<TransitioningFullscreenStates>();
+                }
             }
         }
     }
@@ -337,7 +376,8 @@ pub fn handle_key_press(
 
 pub fn handle_error(mut events: EventReader<X11Event>) {
     for event in events.read() {
-        if let X11Event::Error(err) = event {
+        // fuck it for now, we're only logging errors in dev
+        if let X11Event::Error(err) = event && cfg!(debug_assertions) {
             error!("x11 error: {err:#?}");
         }
     }

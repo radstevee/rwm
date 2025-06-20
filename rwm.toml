@@ -23,6 +23,10 @@ key = "f"
 action = { type = "toggle_fullscreen" }
 
 [[bindings]]
+key = "return"
+action = { type = "shell", value = "st" }
+
+[[bindings]]
 key = "h"
 action = { type = "shell", value = "echo hello world" }
 
