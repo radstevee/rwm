@@ -5,8 +5,8 @@ pub struct Unmanaged;
 
 pub fn handle_unmanage(
     mut monitors: Query<&mut Tags, With<Monitor>>,
-    mut state: ResMut<PlatformState>,
     mut commands: Commands,
+    conn: Res<PlatformConnection>,
     clients: Query<(Entity, &ClientWindow, &Geometry, Option<&ClientFrame>), With<Unmanaged>>,
     root_window: Res<MainRootWindow>,
 ) {
@@ -14,7 +14,7 @@ pub fn handle_unmanage(
         for mut tags in &mut monitors {
             let tag = tags.get_mut(0).unwrap(); // TODO: tagging
 
-            CurrentPlatform::unmanage(
+            RWMP::unmanage(
                 client,
                 **window,
                 *geometry,
@@ -22,7 +22,7 @@ pub fn handle_unmanage(
                 **root_window,
                 tag,
                 &mut commands,
-                &mut state,
+                &conn,
             );
         }
     }

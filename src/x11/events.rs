@@ -18,6 +18,7 @@ use x11rb::{
 };
 
 use crate::prelude::*;
+use crate::x11::IGNORED_SEQUENCES;
 
 #[derive(Event, Debug, Clone)]
 pub enum X11Event {
@@ -32,16 +33,17 @@ pub enum X11Event {
     Error(X11Error),
 }
 
-pub fn poll_events(mut events: EventWriter<X11Event>, mut state: ResMut<X11State>) {
-    state.conn.flush().unwrap();
-
+pub fn poll_events(mut events: EventWriter<X11Event>, conn: ResMut<X11Connection>) {
+    conn.flush().unwrap();
+    let mut ignored_sequences = IGNORED_SEQUENCES.lock().unwrap();
+    
     loop {
-        match state.conn.poll_for_event() {
+        match conn.poll_for_event() {
             Ok(Some(event)) => {
                 let mut should_ignore = false;
                 if let Some(seqno) = event.wire_sequence_number() {
                     // Check sequences_to_ignore and remove entries with old (=smaller) numbers.
-                    while let Some(&Reverse(to_ignore)) = state.ignored_sequences.peek() {
+                    while let Some(&Reverse(to_ignore)) = ignored_sequences.peek() {
                         // Sequence numbers can wrap around, so we cannot simply check for
                         // "to_ignore <= seqno". This is equivalent to "to_ignore - seqno <= 0", which is what we
                         // check instead. Since sequence numbers are unsigned, we need a trick: We decide
@@ -51,7 +53,7 @@ pub fn poll_events(mut events: EventWriter<X11Event>, mut state: ResMut<X11State
                             should_ignore = to_ignore == seqno;
                             break;
                         }
-                        state.ignored_sequences.pop();
+                        ignored_sequences.pop();
                     }
                 }
 
@@ -87,15 +89,14 @@ pub fn poll_events(mut events: EventWriter<X11Event>, mut state: ResMut<X11State
 
 pub fn handle_map_request(
     mut events: EventReader<X11Event>,
-    mut state: ResMut<X11State>,
     mut monitors: Query<&mut Tags, With<Monitor>>,
     mut commands: Commands,
+    conn: ResMut<X11Connection>,
     main_root: Res<MainRootWindow>,
 ) {
     for event in events.read() {
         if let X11Event::MapRequest(event) = event {
-            let geom = &state
-                .conn
+            let geom = &conn
                 .get_geometry(event.window)
                 .unwrap()
                 .reply()
@@ -103,7 +104,8 @@ pub fn handle_map_request(
 
             for mut tags in &mut monitors {
                 let tag = tags.get_mut(0).unwrap(); // TODO: tagging
-                if let Err(e) = state.manage(
+                if let Err(e) = manage(
+                    &conn,
                     event.window,
                     Geometry::new(
                         geom.x as i32,
@@ -148,7 +150,6 @@ pub fn handle_unmap_notify(
                 }
 
                 if **window != event.window {
-                    dbg!(**window, event.window);
                     continue;
                 }
 
@@ -168,7 +169,7 @@ pub fn handle_unmap_notify(
 pub fn handle_enter_notify(
     mut events: EventReader<X11Event>,
     query: Query<(&ClientWindow, &ClientFrame), With<Client>>,
-    state: Res<X11State>,
+    conn: Res<X11Connection>,
     main_root: Res<MainRootWindow>,
 ) {
     for event in events.read() {
@@ -182,12 +183,10 @@ pub fn handle_enter_notify(
                     continue;
                 }
 
-                state
-                    .conn
+                conn
                     .set_input_focus(InputFocus::PARENT, **window, CURRENT_TIME)
                     .unwrap();
-                state
-                    .conn
+                conn
                     .configure_window(
                         **frame,
                         &ConfigureWindowAux::new().stack_mode(StackMode::ABOVE),
@@ -338,11 +337,11 @@ pub fn handle_key_press(
     mut events: EventReader<X11Event>,
     mut keyboard_events: EventWriter<KeybindTriggered>,
     query: Query<Entity, With<Client>>,
-    state: Res<X11State>,
+    conn: Res<X11Connection>,
 ) {
     for event in events.read() {
         if let X11Event::KeyPress(event) = event {
-            let Some(action) = find_keybind_action_for(event.detail, event.state, &state) else {
+            let Some(action) = find_keybind_action_for(event.detail, event.state, &conn) else {
                 continue;
             };
 

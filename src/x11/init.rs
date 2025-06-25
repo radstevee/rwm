@@ -1,4 +1,4 @@
-use std::{collections::BinaryHeap, sync::Arc};
+use std::sync::Arc;
 
 use crate::prelude::*;
 use x11rb::{
@@ -88,11 +88,11 @@ pub fn load_monitors(
 }
 
 pub fn init(
-    conn: ResMut<X11Connection>,
     mut commands: Commands,
+    conn: ResMut<X11Connection>,
     screens: Res<AvailableScreens>,
 ) -> Result<()> {
-    let root_gc = conn.generate_id().unwrap();
+    let root_gc = conn.generate_id()?;
 
     let screen = screens[0].clone();
 
@@ -101,7 +101,7 @@ pub fn init(
         .background(screen.black_pixel)
         .foreground(screen.white_pixel);
 
-    conn.create_gc(root_gc, screen.root, &gc_aux).unwrap();
+    conn.create_gc(root_gc, screen.root, &gc_aux)?;
 
     let wm_protocols = conn
         .intern_atom(false, b"WM_PROTOCOLS")
@@ -119,25 +119,17 @@ pub fn init(
         .atom;
     commands.insert_resource(NetWMDeleteWindow(wm_delete_window));
 
-    let state = X11State {
-        conn: X11Connection(conn.clone()),
-        ignored_sequences: BinaryHeap::default()
-    };
-
-    commands.insert_resource(state);
-
     Ok(())
 }
 
 pub fn scan_existing_windows(
-    mut state: ResMut<X11State>,
     mut monitors: Query<&mut Tags, With<Monitor>>,
     mut commands: Commands,
+    conn: Res<X11Connection>,
     screens: Res<AvailableScreens>,
 ) -> Result<()> {
-    for screen in screens.clone() {
-        let tree = state
-            .conn
+    for screen in (**screens).clone() {
+        let tree = conn
             .query_tree(screen.root)
             .context("failed querying tree")?
             .reply()
@@ -146,11 +138,11 @@ pub fn scan_existing_windows(
         let mut windows = Vec::with_capacity(tree.children.len());
 
         for win in tree.children {
-            let attr = match state.conn.get_window_attributes(win)?.reply() {
+            let attr = match conn.get_window_attributes(win)?.reply() {
                 Ok(attr) => attr,
                 Err(_) => continue,
             };
-            let geom = match state.conn.get_geometry(win)?.reply() {
+            let geom = match conn.get_geometry(win)?.reply() {
                 Ok(geom) => geom,
                 Err(_) => continue,
             };
@@ -168,8 +160,8 @@ pub fn scan_existing_windows(
                 );
 
                 for mut tags in &mut monitors {
-                    let tag = (tags).get_mut(0).unwrap();
-                    state.manage(win, geometry, screen.root, tag, &mut commands)?;
+                    let tag = tags.get_mut(0).unwrap();
+                    manage(&conn.clone(), win, geometry, screen.root, tag, &mut commands)?;
                 }
             }
         }
@@ -178,9 +170,8 @@ pub fn scan_existing_windows(
     Ok(())
 }
 
-pub fn grab(state: Res<X11State>, root_window: Res<MainRootWindow>) {
-    state
-        .conn
+pub fn grab(conn: Res<X11Connection>, root_window: Res<MainRootWindow>) {
+    conn
         .grab_button(
             false,
             **root_window,
@@ -194,8 +185,7 @@ pub fn grab(state: Res<X11State>, root_window: Res<MainRootWindow>) {
         )
         .unwrap();
 
-    state
-        .conn
+    conn
         .grab_key(
             false,
             **root_window,

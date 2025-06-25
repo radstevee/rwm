@@ -44,9 +44,9 @@ fn decompose(mask: KeyButMask) -> Vec<KeyButMask> {
 pub fn find_keybind_action_for(
     code: Keycode,
     mask: KeyButMask,
-    state: &X11State,
+    conn: &X11Connection,
 ) -> Option<KeybindAction> {
-    let keysym = find_keysym(code, state);
+    let keysym = find_keysym(code, conn);
     let keysym = match keysym {
         Ok(keysym) => keysym,
         Err(e) => {
@@ -86,8 +86,8 @@ pub fn find_keybind_action_for(
     None
 }
 
-fn find_keysym(code: Keycode, state: &X11State) -> Result<String> {
-    let cookie = state.conn.get_keyboard_mapping(code, 1).unwrap();
+fn find_keysym(code: Keycode, conn: &X11Connection) -> Result<String> {
+    let cookie = conn.get_keyboard_mapping(code, 1)?;
     let reply = cookie.reply()?;
 
     if let Some(&keysym) = reply.keysyms.first() {

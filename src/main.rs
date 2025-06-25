@@ -11,7 +11,7 @@ fn main() {
 
             ..default()
         }))
-        .add_plugins(PLATFORM)
+        .add_plugins(RWMP)
         .init_resource::<Cli>()
         .init_resource::<MainConfig>()
         .add_event::<KeybindTriggered>()

@@ -1,19 +1,19 @@
 use crate::prelude::*;
 use x11rb::protocol::xproto::InputFocus;
 use x11rb::{
-    COPY_DEPTH_FROM_PARENT, CURRENT_TIME,
-    connection::Connection,
-    protocol::xproto::{
+    connection::Connection, protocol::xproto::{
         ConfigureWindowAux, ConnectionExt, CreateWindowAux, EventMask, WindowClass,
     },
     wrapper::ConnectionExt as _,
+    COPY_DEPTH_FROM_PARENT,
+    CURRENT_TIME,
 };
 
 #[derive(Clone, Copy)]
 pub struct X11;
 
-impl Platform for X11 {
-    type State = X11State;
+impl RWMPlatform for X11 {
+    type Connection = X11Connection;
 
     fn manage(
         window: Window,
@@ -21,9 +21,9 @@ impl Platform for X11 {
         root_window: Window,
         tag: &mut Tag,
         commands: &mut Commands,
-        state: &mut Self::State,
+        conn: &Self::Connection,
     ) -> Result<(Entity, ClientFrame)> {
-        state.manage(window, geometry, root_window, tag, commands)
+        manage(conn, window, geometry, root_window, tag, commands)
     }
 
     fn unmanage(
@@ -34,9 +34,18 @@ impl Platform for X11 {
         root_window: Window,
         tag: &mut Tag,
         commands: &mut Commands,
-        state: &mut Self::State,
+        conn: &Self::Connection,
     ) {
-        state.unmanage(client, window, geometry, frame, root_window, commands, tag)
+        unmanage(
+            conn,
+            client,
+            window,
+            geometry,
+            frame,
+            root_window,
+            commands,
+            tag,
+        )
     }
 
     fn update_bordered_client_geometry(
@@ -44,35 +53,31 @@ impl Platform for X11 {
         geometry: Geometry,
         window: Window,
         frame: Window,
-        state: &mut Self::State,
+        conn: &Self::Connection,
     ) {
         let border_width = config.border().width() as i16;
 
-        state
-            .conn
-            .configure_window(
-                window,
-                &ConfigureWindowAux::new()
-                    // what the fuck
-                    .x(((geometry.x() as i16) - border_width) as i32)
-                    .y(((geometry.y() as i16) - border_width) as i32)
-                    .width(((geometry.width() as i16) + 2 * border_width) as u32)
-                    .height(((geometry.height() as i16) + 2 * border_width) as u32),
-            )
-            .unwrap();
+        conn.configure_window(
+            window,
+            &ConfigureWindowAux::new()
+                // what the fuck
+                .x(((geometry.x() as i16) - border_width) as i32)
+                .y(((geometry.y() as i16) - border_width) as i32)
+                .width(((geometry.width() as i16) + 2 * border_width) as u32)
+                .height(((geometry.height() as i16) + 2 * border_width) as u32),
+        )
+        .unwrap();
 
-        state
-            .conn
-            .reparent_window(
-                window,
-                frame,
-                // ??? why the fuck X11
-                (border_width as f32 * 1.5) as i16,
-                (border_width as f32 * 1.5) as i16,
-            )
-            .unwrap();
+        conn.reparent_window(
+            window,
+            frame,
+            // ??? why the fuck X11
+            (border_width as f32 * 1.5) as i16,
+            (border_width as f32 * 1.5) as i16,
+        )
+        .unwrap();
 
-        state.conn.sync().unwrap();
+        conn.sync().unwrap();
     }
 
     fn delete_frame(
@@ -80,40 +85,17 @@ impl Platform for X11 {
         window: Window,
         frame: Window,
         root_window: Window,
-        state: &mut Self::State,
+        conn: &Self::Connection,
     ) {
-        state
-            .conn
-            .reparent_window(
-                window,
-                root_window,
-                geometry.x() as i16,
-                geometry.y() as i16,
-            )
-            .unwrap();
-        state.conn.destroy_window(frame).unwrap();
-        state.conn.sync().unwrap();
-    }
-
-    fn update_client_geometry(geometry: Geometry, window: Window, state: &mut Self::State) {
-        state
-            .conn
-            .configure_window(
-                window,
-                &ConfigureWindowAux::new().x(geometry.x()).y(geometry.y()),
-            )
-            .unwrap();
-        state
-            .conn
-            .configure_window(
-                window,
-                &ConfigureWindowAux::new()
-                    .width(geometry.width())
-                    .height(geometry.height()),
-            )
-            .unwrap();
-
-        state.conn.sync().unwrap();
+        conn.reparent_window(
+            window,
+            root_window,
+            geometry.x() as i16,
+            geometry.y() as i16,
+        )
+        .unwrap();
+        conn.destroy_window(frame).unwrap();
+        conn.sync().unwrap();
     }
 
     fn create_frame(
@@ -121,9 +103,9 @@ impl Platform for X11 {
         geometry: Geometry,
         window: Window,
         root_window: Window,
-        state: &mut Self::State,
+        conn: &Self::Connection,
     ) -> Result<ClientFrame> {
-        let frame = state.conn.generate_id()?;
+        let frame = conn.generate_id()?;
 
         let win_aux = CreateWindowAux::new()
             .event_mask(
@@ -137,7 +119,7 @@ impl Platform for X11 {
             .background_pixel(config.clone().border().selected_color().hex_value()?);
 
         let border_width = config.border().width() as i16;
-        state.conn.create_window(
+        conn.create_window(
             COPY_DEPTH_FROM_PARENT,
             frame,
             root_window,
@@ -151,7 +133,7 @@ impl Platform for X11 {
             &win_aux,
         )?;
 
-        state.conn.reparent_window(
+        conn.reparent_window(
             window,
             frame,
             // ??? why the fuck X11
@@ -159,20 +141,35 @@ impl Platform for X11 {
             (border_width as f32 * 1.5) as i16,
         )?;
 
-        state.conn.map_window(frame)?;
-        state.conn.map_window(window)?;
+        conn.map_window(frame)?;
+        conn.map_window(window)?;
 
         Ok(ClientFrame(frame))
     }
 
-    fn ungrab_mouse(state: &mut Self::State) {
-        state.conn.ungrab_pointer(CURRENT_TIME).unwrap();
+    fn update_client_geometry(geometry: Geometry, window: Window, conn: &Self::Connection) {
+        conn.configure_window(
+            window,
+            &ConfigureWindowAux::new().x(geometry.x()).y(geometry.y()),
+        )
+        .unwrap();
+        conn.configure_window(
+            window,
+            &ConfigureWindowAux::new()
+                .width(geometry.width())
+                .height(geometry.height()),
+        )
+        .unwrap();
+
+        conn.sync().unwrap();
     }
 
-    fn focus(window: Window, state: &mut Self::State) {
-        state
-            .conn
-            .set_input_focus(InputFocus::PARENT, window, CURRENT_TIME)
+    fn ungrab_mouse(conn: &Self::Connection) {
+        conn.ungrab_pointer(CURRENT_TIME).unwrap();
+    }
+
+    fn focus(window: Window, conn: &Self::Connection) {
+        conn.set_input_focus(InputFocus::PARENT, window, CURRENT_TIME)
             .unwrap();
     }
 }

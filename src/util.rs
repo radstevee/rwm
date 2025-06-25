@@ -26,7 +26,7 @@ impl PathBufExt for PathBuf {
 #[macro_export]
 macro_rules! wayland_unimplemented {
     () => {
-        compiler_error!("Wayland support is currently not implemented");
+        compile_error!("Wayland support is currently not implemented");
     };
 }
 
@@ -75,7 +75,7 @@ macro_rules! dev_only {
 macro_rules! wrapper {
     ($name:ident($inner:ty)) => {
         #[doc = concat!("A wrapper around [`", stringify!($inner), "`] that can be used as a component, resource or event.")]
-        #[derive(Resource, Event, Component, Debug)]
+        #[derive(Resource, Event, Component, Debug, Clone)]
         pub struct $name(pub $inner);
 
         impl std::ops::Deref for $name {

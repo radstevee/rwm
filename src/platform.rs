@@ -1,22 +1,22 @@
 use crate::prelude::*;
 
 #[cfg(feature = "x11")]
-pub static PLATFORM: platform::X11 = platform::X11;
+pub static RWMP: X11 = X11;
 
 #[cfg(feature = "x11")]
-pub type CurrentPlatform = platform::X11;
+pub type RWMP = X11;
 
 #[cfg(not(feature = "x11"))]
 wayland_unimplemented!();
 
-pub type PlatformState = <CurrentPlatform as Platform>::State;
+pub type PlatformConnection = <RWMP as RWMPlatform>::Connection;
 
 /// A platform that rwm can run on. Currently, only X is supported.
 /// A platform instance should not hold any data.
 ///
 /// This is low-level API and should probably not be used directly.
-pub trait Platform: Plugin + Clone + Copy {
-    type State: Resource;
+pub trait RWMPlatform: Plugin + Clone + Copy {
+    type Connection: Resource;
 
     /// Manages a window and returns the populated client.
     fn manage(
@@ -25,7 +25,7 @@ pub trait Platform: Plugin + Clone + Copy {
         root_window: Window,
         tag: &mut Tag,
         commands: &mut Commands,
-        state: &mut Self::State,
+        conn: &Self::Connection,
     ) -> Result<(Entity, ClientFrame)>;
 
     /// Unmanages a window.
@@ -37,7 +37,7 @@ pub trait Platform: Plugin + Clone + Copy {
         root_window: Window,
         tag: &mut Tag,
         commands: &mut Commands,
-        state: &mut Self::State,
+        conn: &Self::Connection,
     );
 
     /// Updates the position of the given [`client`] and adds the border.
@@ -46,7 +46,7 @@ pub trait Platform: Plugin + Clone + Copy {
         geometry: Geometry,
         window: Window,
         frame: Window,
-        state: &mut Self::State,
+        conn: &Self::Connection,
     );
 
     /// Deletes the frame window of a client.
@@ -55,7 +55,7 @@ pub trait Platform: Plugin + Clone + Copy {
         window: Window,
         frame: Window,
         root_window: Window,
-        state: &mut Self::State,
+        conn: &Self::Connection,
     );
 
     /// Recreates the frame window of a client.
@@ -64,15 +64,15 @@ pub trait Platform: Plugin + Clone + Copy {
         geometry: Geometry,
         window: Window,
         root_window: Window,
-        state: &mut Self::State,
+        conn: &Self::Connection,
     ) -> Result<ClientFrame>;
 
     /// Updates the position of the given [`client`] and adds the border.
-    fn update_client_geometry(geometry: Geometry, window: Window, state: &mut Self::State);
+    fn update_client_geometry(geometry: Geometry, window: Window, conn: &Self::Connection);
 
     /// Ungrabs the mouse.
-    fn ungrab_mouse(state: &mut Self::State);
+    fn ungrab_mouse(state: &Self::Connection);
 
     /// Focuses the given [`window`].
-    fn focus(window: Window, state: &mut Self::State);
+    fn focus(window: Window, conn: &Self::Connection);
 }

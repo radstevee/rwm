@@ -46,4 +46,4 @@ pub use derive_constructors::*;
 pub use derive_getters::*;
 pub use std::result::Result::*;
 
-pub use crate::platform::PLATFORM;
+pub use crate::platform::RWMP;
